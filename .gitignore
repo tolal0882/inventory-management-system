@@ -46,3 +46,6 @@ pnpm-debug.log*
 # ─── Misc ────────────────────────────────────────────────
 *.tsbuildinfo
 .cache/
+
+# ─── Root-level artifacts (not a real package) ───────────
+/package-lock.json

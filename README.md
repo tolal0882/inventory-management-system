@@ -81,10 +81,12 @@ pnpm dev
 
 ### 4. Log in
 
+Use the credentials you set in `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in your `backend/.env` file (defaults: `admin@example.com` / `Admin@12345`).
+
 | Field | Value |
 |-------|-------|
-| Email | `tolalong7@gmail.com` |
-| Password | `Long@3624` |
+| Email | *(your `SEED_ADMIN_EMAIL`)* |
+| Password | *(your `SEED_ADMIN_PASSWORD`)* |
 
 ---
 
@@ -195,15 +197,66 @@ All endpoints require `Authorization: Bearer <token>` except `POST /auth/login`.
 
 ## Deployment
 
-### Backend
-Deploy to **Render**, **Railway**, or **Fly.io** with these environment variables set:
-- `DATABASE_URL` — your production PostgreSQL URL
-- `JWT_SECRET` — a long random secret (never reuse the dev one)
-- `FRONTEND_URL` — your production frontend domain
+The backend deploys to **Railway** and the frontend deploys to **Vercel**. Both connect to the same GitHub repository.
 
-### Frontend
-Deploy to **Vercel** or **Netlify** with:
-- `VITE_API_URL` — your deployed backend URL
+---
+
+### Backend → Railway
+
+1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo** → select this repo.
+2. In the service settings, set **Root Directory** to `backend`.
+3. Railway reads `backend/railway.json` automatically — build and start commands are already configured.
+4. Add a **PostgreSQL** plugin (Railway → New → Database → PostgreSQL). Copy the `DATABASE_URL` it generates.
+5. Set these **Environment Variables** in Railway:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | *(auto-filled by Railway PostgreSQL plugin)* |
+| `JWT_SECRET` | *(generate: `openssl rand -base64 48`)* |
+| `JWT_EXPIRES_IN` | `7d` |
+| `NODE_ENV` | `production` |
+| `PORT` | `3000` |
+| `FRONTEND_URL` | *(your Vercel URL, e.g. `https://your-app.vercel.app`)* |
+| `SEED_ADMIN_EMAIL` | *(your admin login email)* |
+| `SEED_ADMIN_PASSWORD` | *(your admin login password)* |
+| `SEED_ADMIN_NAME` | `Administrator` |
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `587` |
+| `SMTP_USER` | *(your Gmail address)* |
+| `SMTP_PASS` | *(your Gmail App Password)* |
+
+6. **Deploy** — Railway runs `prisma migrate deploy` then starts the server on each deploy.
+7. To seed the admin user the first time, run in Railway Shell:
+   ```bash
+   npx ts-node prisma/seed.ts
+   ```
+8. Copy your Railway backend URL (e.g. `https://your-backend.up.railway.app`).
+
+---
+
+### Frontend → Vercel
+
+1. Go to [vercel.com](https://vercel.com) → **Add New Project** → import this GitHub repo.
+2. Set **Root Directory** to `frontend`.
+3. Vercel detects Vite automatically. Confirm:
+   - **Build Command**: `pnpm build`
+   - **Output Directory**: `dist`
+   - **Install Command**: `pnpm install`
+4. Add this **Environment Variable**:
+
+| Variable | Value |
+|---|---|
+| `VITE_API_URL` | `https://your-backend.up.railway.app/api` |
+
+5. **Deploy** — `frontend/vercel.json` handles SPA routing automatically.
+
+---
+
+### After both are live
+
+- Update Railway's `FRONTEND_URL` to your Vercel domain.
+- Update Vercel's `VITE_API_URL` to your Railway backend URL.
+- Redeploy both services once after updating the cross-origin URLs.
 
 ---
 
