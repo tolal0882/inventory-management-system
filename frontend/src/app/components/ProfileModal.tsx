@@ -88,7 +88,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     exit: { opacity: 0, transition: { staggerChildren: 0.05, staggerDirection: -1 } }
   };
 
-  const joinDate = new Date(2023, 0, 15).toLocaleDateString('en-US', {
+  const joinDate = new Date(currentUser.createdAt).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric'
   });
 
