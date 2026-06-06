@@ -43,7 +43,7 @@ export class EmailService {
                       <p style="color:#1a1a2e;font-size:16px;margin:0 0 8px;">Hello, <strong>${name}</strong></p>
                       <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 28px;">
                         We received a request to reset your password. Use the verification code below.
-                        This code is valid for <strong>40 seconds</strong>.
+                        This code is valid for <strong>60 seconds</strong>.
                       </p>
 
                       <!-- Code box -->

@@ -87,7 +87,7 @@ export class AuthService {
     });
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 40 * 1000); // 40 seconds
+    const expiresAt = new Date(Date.now() + 60 * 1000); // 60 seconds
 
     await this.prisma.otpRecord.create({ data: { email, code, expiresAt } });
 
