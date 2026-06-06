@@ -110,7 +110,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       setOtpValue('');
       setOtpError('');
       setForgotStep('otp');
-      startCountdown(40);
+      startCountdown(60);
     } catch (err: any) {
       setForgotEmailError(err.message || 'Failed to send code. Please try again.');
     } finally {
@@ -124,7 +124,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setOtpError('');
     try {
       await authApi.requestOtp(forgotEmail);
-      startCountdown(40);
+      startCountdown(60);
     } catch {
       setOtpError('Failed to resend code. Please try again.');
     }
