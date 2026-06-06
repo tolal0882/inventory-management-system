@@ -4,13 +4,24 @@ A full-stack inventory management system built with **React + TypeScript** (fron
 
 ---
 
+## Live Production
+
+| | URL |
+|---|---|
+| **Frontend** | https://inventory-management-frontend-ten-ebon.vercel.app |
+| **Backend API** | https://inventory-backend-production-9602.up.railway.app/api |
+
+---
+
 ## Project Structure
 
 ```
 Inventory Management System/
-├── frontend/          # React + TypeScript + Tailwind CSS
+├── frontend/          # React + TypeScript + Tailwind CSS (Vite)
 ├── backend/           # NestJS + Prisma + PostgreSQL
-└── README.md          # This file
+├── railway.json       # Root deploy config for Railway (monorepo)
+├── nixpacks.toml      # Node.js build config for Railway
+└── README.md
 ```
 
 ---
@@ -28,10 +39,10 @@ Inventory Management System/
 | Backend | NestJS, TypeScript |
 | ORM | Prisma |
 | Database | PostgreSQL |
-| Auth | JWT (jsonwebtoken) |
+| Auth | JWT (jsonwebtoken, 7-day expiry) |
 | Password | bcryptjs |
-| Testing (FE) | Vitest + Testing Library + happy-dom |
-| Testing (BE) | Jest + ts-jest + @nestjs/testing |
+| Email | Resend API (OTP / forgot password) |
+| Rate Limiting | @nestjs/throttler (120 req/min per IP) |
 
 ---
 
@@ -46,12 +57,12 @@ Inventory Management System/
 
 ---
 
-## Quick Start
+## Quick Start (Local Development)
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/inventory-management-system.git
+git clone https://github.com/tolal0882/inventory-management-system.git
 cd inventory-management-system
 ```
 
@@ -60,7 +71,7 @@ cd inventory-management-system
 ```bash
 cd backend
 npm install
-cp .env.example .env     # Edit .env with your PostgreSQL password and JWT secret
+cp .env.example .env     # Fill in your values (see Environment Variables below)
 npx prisma generate
 npx prisma migrate dev --name init
 npx ts-node prisma/seed.ts
@@ -81,31 +92,31 @@ pnpm dev
 
 ### 4. Log in
 
-Use the credentials you set in `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in your `backend/.env` file (defaults: `admin@example.com` / `Admin@12345`).
-
-| Field | Value |
-|-------|-------|
-| Email | *(your `SEED_ADMIN_EMAIL`)* |
-| Password | *(your `SEED_ADMIN_PASSWORD`)* |
+Use the credentials set in `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` in `backend/.env`.
 
 ---
 
 ## Features
 
 ### Products
-- Add, edit, delete products with SKU tracking
-- Category management
+- Add, edit, deactivate products with SKU tracking
+- Category management and unit tracking
 - Low stock alerts and expiry date tracking
 - Real-time search and filtering
+- **Note:** Products with existing transactions cannot be deleted — deactivate instead
 
 ### Stock Transactions
 - Stock In / Out / Transfer / Shrinkage
-- Approval workflow (Inventory Staff requires approval)
+- Approval workflow (Inventory Staff requires Admin/WM approval)
 - Automatic stock quantity updates on approval
 
 ### Suppliers
 - Supplier database with contact info
-- Link products to suppliers
+- Link products to multiple suppliers
+
+### Purchase Orders
+- Create and track purchase orders per supplier/product
+- Status: Draft → Ordered → Received / Cancelled
 
 ### Invoices
 - Multi-item invoice creation
@@ -113,7 +124,7 @@ Use the credentials you set in `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in y
 - Status: Draft → Pending → Paid / Overdue / Cancelled
 
 ### Reports & Analytics
-- Dashboard with live stats
+- Dashboard with live stats (auto-refreshes every 15 seconds)
 - Stock movement charts (bar, line)
 - Category performance (pie chart)
 - Supplier analytics
@@ -121,8 +132,14 @@ Use the credentials you set in `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in y
 
 ### User Management (Admin only)
 - Create users with role assignment
-- Activate / deactivate users
+- Approve / deactivate / delete users
 - Activity log (login/logout history)
+- **Note:** Users with existing records cannot be deleted — deactivate instead
+
+### Forgot Password
+- Request a 6-digit OTP sent to the user's registered email
+- OTP expires after **60 seconds**
+- Delivered via Resend (works for any email provider)
 
 ### Settings
 - General: profile, language, timezone
@@ -143,6 +160,14 @@ JWT_EXPIRES_IN="7d"
 PORT=3000
 NODE_ENV=development
 FRONTEND_URL="http://localhost:5173"
+
+# Email (Resend — https://resend.com, free 3000 emails/month)
+RESEND_API_KEY="re_your_api_key_here"
+
+# Admin seed (used by prisma/seed.ts)
+SEED_ADMIN_EMAIL="admin@example.com"
+SEED_ADMIN_PASSWORD="Admin@12345"
+SEED_ADMIN_NAME="Administrator"
 ```
 
 ### Frontend — `frontend/.env`
@@ -173,23 +198,23 @@ pnpm test:cov             # With coverage report
 pnpm test:watch           # Watch mode
 ```
 
-**Test summary:** 172 tests total — 126 backend, 46 frontend — all passing.
-
 ---
 
 ## API Reference
 
-Base URL: `http://localhost:3000/api`  
-All endpoints require `Authorization: Bearer <token>` except `POST /auth/login`.
+Base URL: `http://localhost:3000/api`
+All endpoints require `Authorization: Bearer <token>` except `/auth/login`, `/auth/request-otp`, `/auth/verify-otp`, `/auth/reset-password`.
 
 | Resource | Endpoints |
 |----------|-----------|
-| Auth | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` |
-| Products | `GET/POST /products`, `GET/PUT/DELETE /products/:id` |
+| Auth | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/change-password` |
+| Forgot Password | `POST /auth/request-otp`, `POST /auth/verify-otp`, `POST /auth/reset-password` |
+| Products | `GET/POST /products`, `GET/PUT/DELETE /products/:id`, `GET /products/low-stock`, `GET /products/expiring-soon` |
 | Suppliers | `GET/POST /suppliers`, `GET/PUT/DELETE /suppliers/:id` |
 | Transactions | `GET/POST /transactions`, `GET /transactions/:id`, `PUT /transactions/:id/status` |
+| Purchase Orders | `GET/POST /purchase-orders`, `GET/PUT/DELETE /purchase-orders/:id` |
 | Invoices | `GET/POST /invoices`, `GET/PUT/DELETE /invoices/:id` |
-| Users | `GET/POST /users`, `GET/PUT/DELETE /users/:id` |
+| Users | `GET/POST /users`, `GET/PUT/DELETE /users/:id`, `PUT /users/:id/approve` |
 | Dashboard | `GET /dashboard/stats`, `GET /dashboard/stock-movement`, `GET /dashboard/stock-by-category` |
 | Activity Logs | `GET /activity-logs`, `GET /activity-logs/user/:userId` |
 
@@ -197,40 +222,33 @@ All endpoints require `Authorization: Bearer <token>` except `POST /auth/login`.
 
 ## Deployment
 
-The backend deploys to **Railway** and the frontend deploys to **Vercel**. Both connect to the same GitHub repository.
-
----
-
 ### Backend → Railway
 
-1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo** → select this repo.
-2. In the service settings, set **Root Directory** to `backend`.
-3. Railway reads `backend/railway.json` automatically — build and start commands are already configured.
-4. Add a **PostgreSQL** plugin (Railway → New → Database → PostgreSQL). Copy the `DATABASE_URL` it generates.
-5. Set these **Environment Variables** in Railway:
+1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**.
+2. Railway uses the root `railway.json` and `nixpacks.toml` — no extra config needed.
+3. Add a **PostgreSQL** database plugin in the Railway project.
+4. Set these **Environment Variables** on the backend service:
 
 | Variable | Value |
 |---|---|
-| `DATABASE_URL` | *(auto-filled by Railway PostgreSQL plugin)* |
+| `DATABASE_URL` | *(copy from PostgreSQL plugin — use the internal `postgres.railway.internal` URL)* |
 | `JWT_SECRET` | *(generate: `openssl rand -base64 48`)* |
 | `JWT_EXPIRES_IN` | `7d` |
 | `NODE_ENV` | `production` |
 | `PORT` | `3000` |
-| `FRONTEND_URL` | *(your Vercel URL, e.g. `https://your-app.vercel.app`)* |
+| `FRONTEND_URL` | *(your Vercel URL)* |
+| `RESEND_API_KEY` | *(from resend.com — free account)* |
 | `SEED_ADMIN_EMAIL` | *(your admin login email)* |
 | `SEED_ADMIN_PASSWORD` | *(your admin login password)* |
 | `SEED_ADMIN_NAME` | `Administrator` |
-| `SMTP_HOST` | `smtp.gmail.com` |
-| `SMTP_PORT` | `587` |
-| `SMTP_USER` | *(your Gmail address)* |
-| `SMTP_PASS` | *(your Gmail App Password)* |
 
-6. **Deploy** — Railway runs `prisma migrate deploy` then starts the server on each deploy.
-7. To seed the admin user the first time, run in Railway Shell:
+5. Railway runs `prisma migrate deploy` automatically on each deploy via `railway.json`.
+6. To seed the first admin user, run locally:
    ```bash
-   npx ts-node prisma/seed.ts
+   DATABASE_URL="<postgres-public-url>" npx ts-node backend/prisma/seed.ts
    ```
-8. Copy your Railway backend URL (e.g. `https://your-backend.up.railway.app`).
+
+> **Note:** Use `DATABASE_URL` (internal `postgres.railway.internal`) for the service — not `DATABASE_PUBLIC_URL`. The public URL is only for connecting from your laptop.
 
 ---
 
@@ -238,25 +256,39 @@ The backend deploys to **Railway** and the frontend deploys to **Vercel**. Both 
 
 1. Go to [vercel.com](https://vercel.com) → **Add New Project** → import this GitHub repo.
 2. Set **Root Directory** to `frontend`.
-3. Vercel detects Vite automatically. Confirm:
-   - **Build Command**: `pnpm build`
-   - **Output Directory**: `dist`
-   - **Install Command**: `pnpm install`
-4. Add this **Environment Variable**:
+3. Set this **Environment Variable**:
 
 | Variable | Value |
 |---|---|
 | `VITE_API_URL` | `https://your-backend.up.railway.app/api` |
 
-5. **Deploy** — `frontend/vercel.json` handles SPA routing automatically.
+4. **Important:** Before deploying via CLI, delete any local `frontend/dist/` folder first — otherwise Vercel uploads stale pre-built files instead of rebuilding:
+   ```bash
+   rm -rf frontend/dist
+   cd frontend && vercel deploy --prod --force
+   ```
+
+> **Note:** `frontend/vercel.json` configures the SPA rewrite rules and install command automatically.
 
 ---
 
-### After both are live
+### After both are deployed
 
-- Update Railway's `FRONTEND_URL` to your Vercel domain.
-- Update Vercel's `VITE_API_URL` to your Railway backend URL.
-- Redeploy both services once after updating the cross-origin URLs.
+- Set Railway `FRONTEND_URL` = your Vercel domain
+- Set Vercel `VITE_API_URL` = your Railway backend URL
+- Redeploy both after updating the cross-origin URLs
+
+---
+
+## Known Behaviours
+
+| Behaviour | Reason |
+|---|---|
+| Delete user/product returns 409 | Users/products with existing transactions, POs, or invoices cannot be hard-deleted — deactivate instead |
+| Dashboard auto-refreshes every 15s | Polling keeps all users' views in sync without WebSockets |
+| OTP expires in 60 seconds | Short window to prevent code reuse |
+| `DATABASE_PUBLIC_URL` warning in Railway | Safe to ignore — backend uses private internal URL, no egress fees |
+| Emails come from `onboarding@resend.dev` | Resend free plan; verify a custom domain on Resend to change the sender |
 
 ---
 

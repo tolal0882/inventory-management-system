@@ -416,7 +416,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 >
                   <Mail className="w-5 h-5 text-[#1E90FF] shrink-0" />
                   <p className="text-sm text-blue-800">
-                    Enter your registered email. We'll send a <span className="font-semibold">6-digit verification code</span> to confirm it's you. The code expires in <span className="font-semibold">40 seconds</span>.
+                    Enter your registered email. We'll send a <span className="font-semibold">6-digit verification code</span> to confirm it's you. The code expires in <span className="font-semibold">60 seconds</span>.
                   </p>
                 </motion.div>
                 <form onSubmit={handleSendCode} className="space-y-4">
