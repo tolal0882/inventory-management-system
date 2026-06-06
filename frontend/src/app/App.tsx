@@ -19,6 +19,7 @@ const AppContent: React.FC = () => {
     login,
     logout,
     updateCurrentUser,
+    refreshData,
     products,
     setProducts,
     suppliers,
@@ -31,6 +32,12 @@ const AppContent: React.FC = () => {
     invoices,
     setInvoices,
   } = useApp();
+
+  // After any mutation the page updates its specific resource immediately,
+  // then we fire a full refresh to catch cross-resource side effects
+  // (e.g. approving a transaction also changes product stock quantities).
+  const makeCallback = <T,>(setter: React.Dispatch<React.SetStateAction<T>>) =>
+    (data: T) => { setter(data); refreshData(); };
 
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -62,7 +69,7 @@ const AppContent: React.FC = () => {
       case 'products':
         return <ProductsPage
           products={products}
-          onProductsChange={setProducts}
+          onProductsChange={makeCallback(setProducts)}
           suppliers={suppliers}
         />;
       case 'stock':
@@ -71,24 +78,24 @@ const AppContent: React.FC = () => {
             products={products}
             transactions={transactions}
             currentUser={currentUser}
-            onTransactionsChange={setTransactions}
-            onProductsChange={setProducts}
+            onTransactionsChange={makeCallback(setTransactions)}
+            onProductsChange={makeCallback(setProducts)}
           />
         );
       case 'suppliers':
-        return <SuppliersPage suppliers={suppliers} onSuppliersChange={setSuppliers} />;
+        return <SuppliersPage suppliers={suppliers} onSuppliersChange={makeCallback(setSuppliers)} />;
       case 'invoices':
         return <InvoicesPage
           invoices={invoices}
           suppliers={suppliers}
           products={products}
           currentUser={currentUser}
-          onInvoicesChange={setInvoices}
+          onInvoicesChange={makeCallback(setInvoices)}
         />;
       case 'reports':
         return <ReportsPage products={products} transactions={transactions} suppliers={suppliers} />;
       case 'users':
-        return <UsersPage users={users} currentUser={currentUser} onUsersChange={setUsers} activityLogs={userActivityLogs} />;
+        return <UsersPage users={users} currentUser={currentUser} onUsersChange={makeCallback(setUsers)} activityLogs={userActivityLogs} />;
       case 'settings':
         return <SettingsPage currentUser={currentUser} />;
       default:

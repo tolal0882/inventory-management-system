@@ -22,6 +22,8 @@ const setStoredUser = (user: User | null): void => {
   }
 };
 
+const POLL_INTERVAL_MS = 15_000;
+
 interface AppContextType {
   currentUser: User | null;
   isLoading: boolean;
@@ -30,6 +32,7 @@ interface AppContextType {
   logout: () => Promise<void>;
   loginError: string | null;
   updateCurrentUser: (user: User) => void;
+  refreshData: () => Promise<void>;
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   suppliers: Supplier[];
@@ -59,7 +62,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [userActivityLogs, setUserActivityLogs] = useState<UserActivityLog[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
 
-  // Helper to load all data based on role
+  // Keep a ref so polling always sees the current user without re-registering the interval
+  const currentUserRef = React.useRef<User | null>(null);
+  currentUserRef.current = currentUser;
+
   const loadAllData = async (user: User) => {
     const [prods, supps, txns, invs] = await Promise.all([
       productsApi.getAll(),
@@ -72,12 +78,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTransactions(txns);
     setInvoices(invs);
 
-    // Admin, Auditor, and Warehouse_Manager can load users list
     if (user.role === 'Admin' || user.role === 'Auditor' || user.role === 'Warehouse_Manager') {
       const usrs = await usersApi.getAll();
       setUsers(usrs);
     }
   };
+
+  // Callable refresh — pages can call this after mutations so others see changes sooner
+  const refreshData = useCallback(async () => {
+    const user = currentUserRef.current;
+    if (!user) return;
+    try { await loadAllData(user); } catch { /* ignore background refresh errors */ }
+  }, []);
 
   // On app start — check if stored session is still valid
   useEffect(() => {
@@ -102,6 +114,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsInitializing(false);
       });
   }, []);
+
+  // Poll every 15 s — keeps all open tabs/users in sync automatically
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (currentUserRef.current) refreshData();
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [refreshData]);
+
+  // Refresh immediately when the user switches back to this tab
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && currentUserRef.current) refreshData();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refreshData]);
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     setLoginError(null);
@@ -158,6 +187,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         logout,
         loginError,
         updateCurrentUser,
+        refreshData,
         products,
         setProducts,
         suppliers,
