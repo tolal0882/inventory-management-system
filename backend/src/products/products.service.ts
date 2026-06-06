@@ -69,6 +69,19 @@ export class ProductsService {
 
   async remove(id: string) {
     await this.findOne(id);
+
+    const [txCount, poCount, invItemCount] = await Promise.all([
+      this.prisma.stockTransaction.count({ where: { productId: id } }),
+      this.prisma.purchaseOrder.count({ where: { productId: id } }),
+      this.prisma.invoiceItem.count({ where: { productId: id } }),
+    ]);
+
+    if (txCount > 0 || poCount > 0 || invItemCount > 0) {
+      throw new ConflictException(
+        'Cannot delete product with existing transactions or records. Deactivate the product instead.',
+      );
+    }
+
     await this.prisma.product.delete({ where: { id } });
     return { message: 'Product deleted successfully' };
   }

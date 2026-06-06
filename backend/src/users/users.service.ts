@@ -94,7 +94,24 @@ export class UsersService {
 
   async remove(id: string) {
     await this.findOne(id);
-    await this.prisma.user.delete({ where: { id } });
+
+    const [txCount, poCount, invCount] = await Promise.all([
+      this.prisma.stockTransaction.count({ where: { userId: id } }),
+      this.prisma.purchaseOrder.count({ where: { createdById: id } }),
+      this.prisma.invoice.count({ where: { createdById: id } }),
+    ]);
+
+    if (txCount > 0 || poCount > 0 || invCount > 0) {
+      throw new ConflictException(
+        'Cannot delete user with existing transactions or records. Deactivate the user instead.',
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.userActivityLog.deleteMany({ where: { userId: id } }),
+      this.prisma.user.delete({ where: { id } }),
+    ]);
+
     return { message: 'User deleted successfully' };
   }
 }
