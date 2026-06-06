@@ -1,23 +1,15 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 @Injectable()
 export class EmailService {
-  private transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '465'),
-    secure: parseInt(process.env.SMTP_PORT || '465') === 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+  private resend = new Resend(process.env.RESEND_API_KEY);
 
   async sendOtpEmail(to: string, code: string, name: string) {
     try {
-      await this.transporter.sendMail({
-        from: `"Inventory Pro" <${process.env.SMTP_USER}>`,
-        to,
+      await this.resend.emails.send({
+        from: 'Inventory Pro <onboarding@resend.dev>',
+        to: [to],
         subject: 'Your Password Reset Code — Inventory Pro',
         html: `
           <!DOCTYPE html>
@@ -74,10 +66,8 @@ export class EmailService {
         `,
       });
     } catch (err: any) {
-      console.error('[EmailService] SMTP error:', err.message, err.code);
-      throw new InternalServerErrorException(
-        `Failed to send email: ${err.message}`
-      );
+      console.error('[EmailService] Resend error:', err.message);
+      throw new InternalServerErrorException(`Failed to send email: ${err.message}`);
     }
   }
 }
