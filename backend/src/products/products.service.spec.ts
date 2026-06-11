@@ -13,6 +13,9 @@ const mockPrisma = {
     update: jest.fn(),
     delete: jest.fn(),
   },
+  supplier: {
+    findUnique: jest.fn(),
+  },
 };
 
 const NOW = new Date();
@@ -179,10 +182,12 @@ describe('ProductsService', () => {
     it('creates and returns a new product', async () => {
       mockPrisma.product.findUnique.mockResolvedValue(null); // no duplicate SKU
       mockPrisma.product.create.mockResolvedValue(PRODUCT);
+      mockPrisma.supplier.findUnique.mockResolvedValue({ id: 'sup-1', name: 'Acme' });
 
       const result = await service.create({
         sku: 'SKU-001', name: 'Widget', category: 'Electronics',
         unit: 'pcs', costPrice: 10, stockQuantity: 50, minStock: 20,
+        supplierId: 'sup-1',
       });
 
       expect(result.sku).toBe('SKU-001');
@@ -192,10 +197,12 @@ describe('ProductsService', () => {
     it('defaults status to Active when not provided', async () => {
       mockPrisma.product.findUnique.mockResolvedValue(null);
       mockPrisma.product.create.mockResolvedValue(PRODUCT);
+      mockPrisma.supplier.findUnique.mockResolvedValue({ id: 'sup-1', name: 'Acme' });
 
       await service.create({
         sku: 'SKU-002', name: 'Gadget', category: 'Electronics',
         unit: 'pcs', costPrice: 5, stockQuantity: 10, minStock: 2,
+        supplierId: 'sup-1',
       });
 
       const createData = mockPrisma.product.create.mock.calls[0][0].data;
@@ -205,11 +212,13 @@ describe('ProductsService', () => {
     it('parses expirationDate string into a Date object', async () => {
       mockPrisma.product.findUnique.mockResolvedValue(null);
       mockPrisma.product.create.mockResolvedValue({ ...PRODUCT, hasExpiration: true });
+      mockPrisma.supplier.findUnique.mockResolvedValue({ id: 'sup-1', name: 'Acme' });
 
       await service.create({
         sku: 'SKU-EXP', name: 'Milk', category: 'Food',
         unit: 'L', costPrice: 2, stockQuantity: 10, minStock: 2,
         hasExpiration: true, expirationDate: '2025-12-31',
+        supplierId: 'sup-1',
       });
 
       const createData = mockPrisma.product.create.mock.calls[0][0].data;
@@ -222,6 +231,7 @@ describe('ProductsService', () => {
       await expect(service.create({
         sku: 'SKU-001', name: 'Dup', category: 'X', unit: 'pcs',
         costPrice: 1, stockQuantity: 1, minStock: 0,
+        supplierId: 'sup-1',
       })).rejects.toThrow(ConflictException);
 
       expect(mockPrisma.product.create).not.toHaveBeenCalled();

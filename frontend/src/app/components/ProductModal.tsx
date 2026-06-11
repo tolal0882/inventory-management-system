@@ -6,6 +6,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Product, PRODUCT_CATEGORIES } from '../types';
 import { useApp } from '../context/AppContext';
+import { toast } from 'sonner';
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -55,6 +56,17 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (suppliers.length === 0) {
+      toast.error('No suppliers available. Please add a supplier before adding a product.');
+      return;
+    }
+
+    if (!formData.supplierId) {
+      toast.error('Please select a supplier for this product.');
+      return;
+    }
+
     const productData: Product = {
       id: product?.id || Date.now().toString(),
       sku: formData.sku || '',
@@ -187,21 +199,26 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="supplier">Supplier</Label>
+              <Label htmlFor="supplier">Supplier *</Label>
               <Select
-                value={formData.supplierId || 'none'}
-                onValueChange={(value) => setFormData({ ...formData, supplierId: value === 'none' ? '' : value })}
+                value={formData.supplierId || ''}
+                onValueChange={(value) => setFormData({ ...formData, supplierId: value })}
+                disabled={suppliers.length === 0}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a supplier" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No supplier</SelectItem>
                   {suppliers.map(supplier => (
                     <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {suppliers.length === 0 && (
+                <p className="text-xs text-red-600">
+                  No suppliers found. Please add a supplier first before adding a product.
+                </p>
+              )}
             </div>
 
             {/* Expiration Tracking Toggle */}
@@ -240,7 +257,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-[#1E90FF] hover:bg-[#1873CC]">
+            <Button type="submit" className="bg-[#1E90FF] hover:bg-[#1873CC]" disabled={suppliers.length === 0}>
               {product ? 'Update' : 'Add'} Product
             </Button>
           </DialogFooter>

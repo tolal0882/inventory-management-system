@@ -41,7 +41,7 @@ export class CreateProductDto {
   @IsBoolean()
   hasExpiration?: boolean;
 
-  @IsOptional()
   @IsString()
-  supplierId?: string;
+  @IsNotEmpty()
+  supplierId: string;
 }

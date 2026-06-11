@@ -40,13 +40,16 @@ export class ProductsService {
   async create(dto: CreateProductDto) {
     const exists = await this.prisma.product.findUnique({ where: { sku: dto.sku } });
     if (exists) throw new ConflictException(`SKU "${dto.sku}" already exists`);
-    const { status, expirationDate, supplierId, ...rest } = dto;
+
+    const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.supplierId } });
+    if (!supplier) throw new NotFoundException(`Supplier ${dto.supplierId} not found`);
+
+    const { status, expirationDate, ...rest } = dto;
     return this.prisma.product.create({
       data: {
         ...rest,
         status: (status as UserStatus) ?? UserStatus.Active,
         expirationDate: expirationDate ? new Date(expirationDate) : null,
-        supplierId: supplierId || null,
       },
     });
   }
