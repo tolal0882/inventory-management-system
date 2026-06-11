@@ -11,6 +11,7 @@ import { InvoicesModule } from './invoices/invoices.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
     PurchaseOrdersModule,
     DashboardModule,
     ActivityLogsModule,
+    AdminModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

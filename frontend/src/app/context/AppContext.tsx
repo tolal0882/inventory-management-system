@@ -28,7 +28,8 @@ interface AppContextType {
   currentUser: User | null;
   isLoading: boolean;
   isInitializing: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; requires2FA?: boolean; email?: string }>;
+  verify2FA: (email: string, code: string) => Promise<boolean>;
   logout: () => Promise<void>;
   loginError: string | null;
   updateCurrentUser: (user: User) => void;
@@ -132,18 +133,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refreshData]);
 
-  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string) => {
     setLoginError(null);
     setIsLoading(true);
     try {
-      const user = await authApi.login(email, password);
+      const result = await authApi.login(email, password);
+      if (result && (result as any).requires2FA) {
+        setIsLoading(false);
+        return { success: false, requires2FA: true, email: (result as any).email as string };
+      }
+      const user = result;
+      setCurrentUser(user);
+      setStoredUser(user);
+      await loadAllData(user);
+      setIsLoading(false);
+      return { success: true };
+    } catch (err: any) {
+      setLoginError(err.message || 'Invalid email or password');
+      setIsLoading(false);
+      return { success: false };
+    }
+  }, []);
+
+  const verify2FA = useCallback(async (email: string, code: string): Promise<boolean> => {
+    setLoginError(null);
+    setIsLoading(true);
+    try {
+      const user = await authApi.verify2FA(email, code);
       setCurrentUser(user);
       setStoredUser(user);
       await loadAllData(user);
       setIsLoading(false);
       return true;
     } catch (err: any) {
-      setLoginError(err.message || 'Invalid email or password');
+      setLoginError(err.message || 'Invalid or expired code');
       setIsLoading(false);
       return false;
     }
@@ -184,6 +207,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isLoading,
         isInitializing,
         login,
+        verify2FA,
         logout,
         loginError,
         updateCurrentUser,

@@ -14,6 +14,12 @@ export interface User {
   department?: string; // Department within organization
   phone?: string; // Contact phone number
   createdAt?: string;
+  emailNotifications?: boolean;
+  lowStockAlerts?: boolean;
+  orderNotifications?: boolean;
+  pushNotifications?: boolean;
+  emailDigest?: string;
+  twoFactorEnabled?: boolean;
 }
 
 export interface Product {
@@ -28,6 +34,7 @@ export interface Product {
   status: "Active" | "Inactive";
   expirationDate?: string; // Optional expiration date for perishable items
   hasExpiration?: boolean; // Whether this product type has expiration tracking
+  supplierId?: string | null; // Linked supplier
 }
 
 export interface Supplier {

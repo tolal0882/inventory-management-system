@@ -40,12 +40,13 @@ export class ProductsService {
   async create(dto: CreateProductDto) {
     const exists = await this.prisma.product.findUnique({ where: { sku: dto.sku } });
     if (exists) throw new ConflictException(`SKU "${dto.sku}" already exists`);
-    const { status, expirationDate, ...rest } = dto;
+    const { status, expirationDate, supplierId, ...rest } = dto;
     return this.prisma.product.create({
       data: {
         ...rest,
         status: (status as UserStatus) ?? UserStatus.Active,
         expirationDate: expirationDate ? new Date(expirationDate) : null,
+        supplierId: supplierId || null,
       },
     });
   }
@@ -56,13 +57,14 @@ export class ProductsService {
       const exists = await this.prisma.product.findFirst({ where: { sku: dto.sku, NOT: { id } } });
       if (exists) throw new ConflictException(`SKU "${dto.sku}" already exists`);
     }
-    const { status, expirationDate, ...rest } = dto;
+    const { status, expirationDate, supplierId, ...rest } = dto;
     return this.prisma.product.update({
       where: { id },
       data: {
         ...rest,
         ...(status && { status: status as UserStatus }),
         ...(expirationDate && { expirationDate: new Date(expirationDate) }),
+        ...(supplierId !== undefined && { supplierId: supplierId || null }),
       },
     });
   }

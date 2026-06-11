@@ -25,6 +25,59 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    if (user.twoFactorEnabled) {
+      await this.prisma.otpRecord.updateMany({
+        where: { email: user.email, used: false },
+        data: { used: true },
+      });
+
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 60 * 1000); // 60 seconds
+
+      await this.prisma.otpRecord.create({ data: { email: user.email, code, expiresAt } });
+      await this.emailService.sendOtpEmail(user.email, code, user.name);
+
+      return { requires2FA: true, email: user.email };
+    }
+
+    await this.prisma.userActivityLog.create({
+      data: {
+        userId: user.id,
+        userName: user.name,
+        action: 'Login',
+        ipAddress: ip || 'Unknown',
+        device: device || 'Unknown',
+        location: 'Unknown',
+      },
+    });
+
+    const payload = { sub: user.id, email: user.email, role: user.role };
+    const token = this.jwtService.sign(payload);
+    const { password: _, ...userWithoutPassword } = user;
+    return { access_token: token, user: userWithoutPassword };
+  }
+
+  // ── 2FA Login: Step 2 ───────────────────────────────────
+  async verify2FA(email: string, code: string, ip?: string, device?: string) {
+    const otp = await this.prisma.otpRecord.findFirst({
+      where: {
+        email,
+        code,
+        used: false,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!otp) throw new BadRequestException('Invalid or expired verification code.');
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || user.status === 'Inactive') {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    await this.prisma.otpRecord.update({ where: { id: otp.id }, data: { used: true } });
+
     await this.prisma.userActivityLog.create({
       data: {
         userId: user.id,
@@ -131,6 +184,8 @@ export class AuthService {
         id: true, name: true, email: true, role: true,
         status: true, workplace: true, department: true,
         phone: true, createdAt: true,
+        emailNotifications: true, lowStockAlerts: true, orderNotifications: true,
+        pushNotifications: true, emailDigest: true, twoFactorEnabled: true,
       },
     });
     if (!user) throw new UnauthorizedException('User not found');

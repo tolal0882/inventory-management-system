@@ -122,11 +122,11 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ products, transactions
 
   // Supplier Performance
   const supplierPerformance = useMemo(() => suppliers.map(supplier => {
-    const suppliedProducts = products.filter(p => supplier.productsSupplied.includes(p.id));
+    const suppliedProducts = products.filter(p => p.supplierId === supplier.id);
     const totalValue = suppliedProducts.reduce((sum, p) => sum + (p.stockQuantity * p.costPrice), 0);
     return {
       name: supplier.name,
-      productCount: supplier.productsSupplied.length,
+      productCount: suppliedProducts.length,
       totalValue,
       activeProducts: suppliedProducts.filter(p => p.status === 'Active').length,
       contact: supplier.contact,

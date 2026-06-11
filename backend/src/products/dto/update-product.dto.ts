@@ -11,4 +11,5 @@ export class UpdateProductDto {
   @IsOptional() @IsEnum(['Active', 'Inactive']) status?: string;
   @IsOptional() @IsString() expirationDate?: string;
   @IsOptional() @IsBoolean() hasExpiration?: boolean;
+  @IsOptional() @IsString() supplierId?: string;
 }

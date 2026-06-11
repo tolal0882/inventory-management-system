@@ -75,6 +75,13 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  emailNotifications Boolean @default(true)
+  lowStockAlerts     Boolean @default(true)
+  orderNotifications Boolean @default(true)
+  pushNotifications  Boolean @default(false)
+  emailDigest        String  @default("daily")
+  twoFactorEnabled   Boolean @default(false)
+
   transactions     StockTransaction[]
   purchaseOrders   PurchaseOrder[]
   invoices         Invoice[]
@@ -93,9 +100,11 @@ model Product {
   status          UserStatus @default(Active)
   expirationDate  DateTime?
   hasExpiration   Boolean   @default(false)
+  supplierId      String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  supplier         Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   transactions     StockTransaction[]
   purchaseOrders   PurchaseOrder[]
   invoiceItems     InvoiceItem[]
@@ -111,6 +120,7 @@ model Supplier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  suppliedProducts Product[]
   products       SupplierProduct[]
   purchaseOrders PurchaseOrder[]
   invoices       Invoice[]

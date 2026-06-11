@@ -42,9 +42,21 @@ async function request<T>(
 // ─── Auth ────────────────────────────────────────────────────
 export const authApi = {
   login: async (email: string, password: string) => {
-    const data = await request<{ access_token: string; user: any }>('/auth/login', {
+    const data = await request<{ access_token?: string; user?: any; requires2FA?: boolean; email?: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    });
+    if (data.requires2FA) {
+      return { requires2FA: true as const, email: data.email! };
+    }
+    setToken(data.access_token!);
+    return data.user;
+  },
+
+  verify2FA: async (email: string, code: string) => {
+    const data = await request<{ access_token: string; user: any }>('/auth/verify-2fa', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
     });
     setToken(data.access_token);
     return data.user;
@@ -166,4 +178,9 @@ export const activityLogsApi = {
     return request<any[]>(`/activity-logs${query ? '?' + query : ''}`);
   },
   getByUser: (userId: string) => request<any[]>(`/activity-logs/user/${userId}`),
+};
+
+// ─── Admin ───────────────────────────────────────────────────
+export const adminApi = {
+  clearData: () => request<{ message: string }>('/admin/clear-data', { method: 'DELETE' }),
 };

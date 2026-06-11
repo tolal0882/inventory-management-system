@@ -9,17 +9,27 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '../components/ui/input-ot
 import { motion, AnimatePresence } from 'motion/react';
 
 interface LoginPageProps {
-  onLogin: (email: string, password: string) => Promise<boolean>;
+  onLogin: (email: string, password: string) => Promise<{ success: boolean; requires2FA?: boolean; email?: string }>;
+  onVerify2FA: (email: string, code: string) => Promise<boolean>;
 }
 
 // Forgot password steps: 'email' | 'otp' | 'reset' | 'success'
 type ForgotStep = 'email' | 'otp' | 'reset' | 'success';
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onVerify2FA }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // ---------- 2FA challenge state ----------
+  const [requires2FA, setRequires2FA] = useState(false);
+  const [twoFAEmail, setTwoFAEmail] = useState('');
+  const [twoFACode, setTwoFACode] = useState('');
+  const [twoFAError, setTwoFAError] = useState('');
+  const [verifying2FA, setVerifying2FA] = useState(false);
+  const [twoFACountdown, setTwoFACountdown] = useState(0);
+  const twoFACountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ---------- Forgot Password state ----------
   const [isForgotOpen, setIsForgotOpen] = useState(false);
@@ -61,6 +71,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   };
 
   useEffect(() => () => { if (countdownRef.current) clearInterval(countdownRef.current); }, []);
+  useEffect(() => () => { if (twoFACountdownRef.current) clearInterval(twoFACountdownRef.current); }, []);
+
+  const startTwoFACountdown = (seconds = 60) => {
+    setTwoFACountdown(seconds);
+    if (twoFACountdownRef.current) clearInterval(twoFACountdownRef.current);
+    twoFACountdownRef.current = setInterval(() => {
+      setTwoFACountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(twoFACountdownRef.current!);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   const resetForgot = () => {
     setForgotStep('email');
@@ -87,13 +112,54 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     if (!email || !password) { setError('Please enter both email and password'); return; }
     setSubmitting(true);
     try {
-      const success = await onLogin(email, password);
-      if (!success) setError('Invalid email or password.');
+      const result = await onLogin(email, password);
+      if (result.requires2FA) {
+        setTwoFAEmail(result.email || email);
+        setRequires2FA(true);
+        setTwoFACode('');
+        setTwoFAError('');
+        startTwoFACountdown(60);
+      } else if (!result.success) {
+        setError('Invalid email or password.');
+      }
     } catch {
       setError('Login failed. Please try again.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleVerify2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTwoFAError('');
+    if (twoFACode.length < 6) { setTwoFAError('Please enter the 6-digit code.'); return; }
+    setVerifying2FA(true);
+    try {
+      const success = await onVerify2FA(twoFAEmail, twoFACode);
+      if (!success) setTwoFAError('Invalid or expired verification code.');
+    } catch {
+      setTwoFAError('Verification failed. Please try again.');
+    } finally {
+      setVerifying2FA(false);
+    }
+  };
+
+  const handleResend2FA = async () => {
+    if (twoFACountdown > 0) return;
+    setTwoFAError('');
+    try {
+      await onLogin(email, password);
+      startTwoFACountdown(60);
+    } catch {
+      setTwoFAError('Could not resend code. Please try again.');
+    }
+  };
+
+  const handleBackToLogin = () => {
+    setRequires2FA(false);
+    setTwoFACode('');
+    setTwoFAError('');
+    setPassword('');
   };
 
   // ---------- Step 1: send code ----------
@@ -259,6 +325,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         </motion.div>
 
         {/* Login form */}
+        {!requires2FA && (
         <motion.form onSubmit={handleSubmit} className="space-y-4" variants={itemVariants}>
 
           <motion.div className="space-y-2" variants={itemVariants}>
@@ -332,7 +399,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             </Button>
           </motion.div>
         </motion.form>
+        )}
 
+        {!requires2FA && (
         <motion.div className="mt-5 text-center" variants={itemVariants}>
           <motion.button
             type="button"
@@ -344,6 +413,74 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             Forgot Password?
           </motion.button>
         </motion.div>
+        )}
+
+        {/* ───────── 2FA Verification ───────── */}
+        {requires2FA && (
+          <motion.form onSubmit={handleVerify2FA} className="space-y-5" variants={itemVariants}>
+            <motion.div className="text-center space-y-1" variants={itemVariants}>
+              <p className="text-sm text-gray-600">
+                We've sent a 6-digit verification code to
+              </p>
+              <p className="text-sm font-semibold text-gray-900">{twoFAEmail}</p>
+            </motion.div>
+
+            <motion.div className="flex justify-center" variants={itemVariants}>
+              <InputOTP maxLength={6} value={twoFACode} onChange={setTwoFACode}>
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} className="w-11 h-11 text-base" />
+                  <InputOTPSlot index={1} className="w-11 h-11 text-base" />
+                  <InputOTPSlot index={2} className="w-11 h-11 text-base" />
+                  <InputOTPSlot index={3} className="w-11 h-11 text-base" />
+                  <InputOTPSlot index={4} className="w-11 h-11 text-base" />
+                  <InputOTPSlot index={5} className="w-11 h-11 text-base" />
+                </InputOTPGroup>
+              </InputOTP>
+            </motion.div>
+
+            <AnimatePresence mode="wait">
+              {twoFAError && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, height: "auto", y: 0, scale: 1 }}
+                  exit={{ opacity: 0, height: 0, y: -10, scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 24 }}
+                  className="text-sm text-red-600 bg-red-50 p-3 rounded-xl border border-red-200"
+                >
+                  {twoFAError}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <motion.div variants={itemVariants} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }} transition={spring}>
+              <Button
+                type="submit"
+                disabled={verifying2FA || twoFACode.length < 6}
+                className="w-full bg-gradient-to-r from-[#1E90FF] to-[#0055CC] hover:from-[#1873CC] hover:to-[#0044AA] shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-70 rounded-xl py-5 text-base font-semibold"
+              >
+                {verifying2FA ? <><Spinner /> Verifying…</> : 'Verify & Sign In'}
+              </Button>
+            </motion.div>
+
+            <motion.div className="flex items-center justify-between text-sm" variants={itemVariants}>
+              <button
+                type="button"
+                onClick={handleBackToLogin}
+                className="text-gray-500 hover:text-gray-700 transition-colors duration-200"
+              >
+                ← Back to login
+              </button>
+              <button
+                type="button"
+                onClick={handleResend2FA}
+                disabled={twoFACountdown > 0}
+                className="text-[#1E90FF] hover:text-[#0055CC] font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {twoFACountdown > 0 ? `Resend code in ${twoFACountdown}s` : 'Resend code'}
+              </button>
+            </motion.div>
+          </motion.form>
+        )}
       </motion.div>
 
       {/* ───────── Forgot Password Modal ───────── */}

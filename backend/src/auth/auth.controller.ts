@@ -33,6 +33,15 @@ export class AuthController {
     return this.authService.changePassword(req.user.id, dto.currentPassword, dto.newPassword);
   }
 
+  // ── 2FA Login (no JWT required) ─────────────────────────
+  @Post('verify-2fa')
+  @HttpCode(200)
+  async verify2FA(@Body() dto: { email: string; code: string }, @Req() req: Request) {
+    const ip = req.ip || req.headers['x-forwarded-for'] as string;
+    const device = req.headers['user-agent'];
+    return this.authService.verify2FA(dto.email, dto.code, ip, device);
+  }
+
   // ── Forgot Password flow (no JWT required) ──────────────
   @Post('request-otp')
   @HttpCode(200)

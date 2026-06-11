@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
 import { User } from '../types';
-import { authApi, productsApi } from '../services/api';
+import { authApi, productsApi, usersApi, adminApi } from '../services/api';
 import { useApp } from '../context/AppContext';
 // @ts-ignore
 import * as XLSX from 'xlsx';
@@ -80,9 +80,8 @@ function saveToStorage(key: string, value: object) {
 
 // ─── Component ────────────────────────────────────────────────
 export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
-  const { products, suppliers, transactions, invoices, users, setProducts } = useApp();
+  const { products, suppliers, transactions, invoices, users, setProducts, updateCurrentUser, refreshData } = useApp();
   const isAdmin = currentUser?.role === 'Admin';
-  const notifKey  = `inv_settings_notif_${currentUser?.id || 'default'}`;
   const securityKey = `inv_settings_security_${currentUser?.id || 'default'}`;
   const dataKey   = `inv_settings_data_${currentUser?.id || 'default'}`;
 
@@ -129,6 +128,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
   const [lastExport,       setLastExport]       = useState<string>('—');
   const [clearStep,        setClearStep]        = useState<0 | 1>(0);
   const [clearInput,       setClearInput]       = useState('');
+  const [clearLoading,     setClearLoading]     = useState(false);
+  const [settingsSaving,   setSettingsSaving]   = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
   // ── Load from localStorage ────────────────────────────────
@@ -155,28 +156,73 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     setAutoBackup(d.autoBackup); setBackupFrequency(d.backupFrequency);
   }, []);
 
+  // Apply notification/security settings from the user's saved profile (backend)
+  const applyFromUser = useCallback((user: User | null) => {
+    applyNotif({
+      emailNotifications: user?.emailNotifications ?? NOTIF_DEFAULTS.emailNotifications,
+      lowStockAlerts: user?.lowStockAlerts ?? NOTIF_DEFAULTS.lowStockAlerts,
+      orderNotifications: user?.orderNotifications ?? NOTIF_DEFAULTS.orderNotifications,
+      pushNotifications: user?.pushNotifications ?? NOTIF_DEFAULTS.pushNotifications,
+      emailDigest: user?.emailDigest ?? NOTIF_DEFAULTS.emailDigest,
+    });
+    applySecurity({
+      ...loadFromStorage(securityKey, SECURITY_DEFAULTS),
+      twoFactorAuth: user?.twoFactorEnabled ?? SECURITY_DEFAULTS.twoFactorAuth,
+    });
+  }, [applyNotif, applySecurity, securityKey]);
+
   useEffect(() => {
     applyGeneral(loadFromStorage(GENERAL_KEY, GENERAL_DEFAULTS));
-    applyNotif(loadFromStorage(notifKey, NOTIF_DEFAULTS));
-    applySecurity(loadFromStorage(securityKey, SECURITY_DEFAULTS));
+    applyFromUser(currentUser);
     applyData(loadFromStorage(dataKey, DATA_DEFAULTS));
     const ts = localStorage.getItem('inv_last_export');
     if (ts) setLastExport(new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }));
-  }, [applyGeneral, applyNotif, applySecurity, applyData, notifKey, securityKey, dataKey]);
+  }, [applyGeneral, applyFromUser, applyData, currentUser, dataKey]);
+
+  // ── Push notifications (browser) ──────────────────────────
+  const handlePushToggle = async (checked: boolean) => {
+    if (checked) {
+      if (!('Notification' in window)) {
+        toast.error('This browser does not support push notifications');
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        toast.error('Browser notification permission was denied');
+        return;
+      }
+      new Notification('Inventory Pro', { body: 'Push notifications are now enabled.' });
+    }
+    setPushNotifications(checked);
+  };
 
   // ── Save / Cancel ─────────────────────────────────────────
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
     if (isAdmin) saveToStorage(GENERAL_KEY, { companyName, companyEmail, phone, timezone, currency, language, address, city, stateProvince, zip, lowStockThreshold, reorderPoint, stockValuation, defaultCategory });
-    saveToStorage(notifKey, { emailNotifications, lowStockAlerts, orderNotifications, pushNotifications, emailDigest });
     saveToStorage(securityKey, { twoFactorAuth, sessionTimeout, ipWhitelist, auditLogging });
     saveToStorage(dataKey, { autoBackup, backupFrequency });
+
+    if (currentUser) {
+      setSettingsSaving(true);
+      try {
+        const updated = await usersApi.update(currentUser.id, {
+          emailNotifications, lowStockAlerts, orderNotifications, pushNotifications, emailDigest,
+          twoFactorEnabled: twoFactorAuth,
+        });
+        updateCurrentUser({ ...currentUser, ...updated });
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to save notification/security settings');
+        setSettingsSaving(false);
+        return;
+      }
+      setSettingsSaving(false);
+    }
     toast.success('Settings saved successfully');
   };
 
   const handleCancelSettings = () => {
     applyGeneral(loadFromStorage(GENERAL_KEY, GENERAL_DEFAULTS));
-    applyNotif(loadFromStorage(notifKey, NOTIF_DEFAULTS));
-    applySecurity(loadFromStorage(securityKey, SECURITY_DEFAULTS));
+    applyFromUser(currentUser);
     applyData(loadFromStorage(dataKey, DATA_DEFAULTS));
     toast.info('Changes discarded');
   };
@@ -359,7 +405,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
   };
 
   // ── Clear All Data ────────────────────────────────────────
-  const handleClearData = () => {
+  const handleClearData = async () => {
     if (clearStep === 0) {
       setClearStep(1);
       setClearInput('');
@@ -369,21 +415,31 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
       toast.error('Type DELETE exactly to confirm');
       return;
     }
-    // Clear all inv_ localStorage keys (settings only — DB is server-side)
-    Object.keys(localStorage)
-      .filter(k => k.startsWith('inv_settings'))
-      .forEach(k => localStorage.removeItem(k));
+    if (!isAdmin) {
+      toast.error('Only admins can clear all data');
+      return;
+    }
 
-    setClearStep(0);
-    setClearInput('');
+    setClearLoading(true);
+    try {
+      await adminApi.clearData();
+      await refreshData();
 
-    // Re-apply defaults so UI reflects cleared state
-    applyGeneral(GENERAL_DEFAULTS);
-    applyNotif(NOTIF_DEFAULTS);
-    applySecurity(SECURITY_DEFAULTS);
-    applyData(DATA_DEFAULTS);
+      // Clear local settings caches as well
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('inv_settings'))
+        .forEach(k => localStorage.removeItem(k));
+      applyGeneral(GENERAL_DEFAULTS);
+      applyData(DATA_DEFAULTS);
 
-    toast.success('All saved settings have been reset to defaults. Database records on the server are unchanged.');
+      setClearStep(0);
+      setClearInput('');
+      toast.success('All inventory data (products, suppliers, transactions, invoices, purchase orders) has been permanently deleted.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to clear data');
+    } finally {
+      setClearLoading(false);
+    }
   };
 
   // ── Live stats ────────────────────────────────────────────
@@ -578,7 +634,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                     { id: 'email-notif', icon: Mail, label: 'Email Notifications', desc: 'Receive notifications via email', checked: emailNotifications, onChange: setEmailNotifications },
                     { id: 'low-stock-alerts', icon: AlertTriangle, label: 'Low Stock Alerts', desc: 'Get notified when products are running low', checked: lowStockAlerts, onChange: setLowStockAlerts },
                     { id: 'order-notif', icon: Shield, label: 'Order Notifications', desc: 'Alerts for new orders and shipments', checked: orderNotifications, onChange: setOrderNotifications },
-                    { id: 'push-notif', icon: Smartphone, label: 'Push Notifications', desc: 'Receive push notifications on your device', checked: pushNotifications, onChange: setPushNotifications },
+                    { id: 'push-notif', icon: Smartphone, label: 'Push Notifications', desc: 'Receive push notifications on your device', checked: pushNotifications, onChange: handlePushToggle },
                   ].map(({ id, icon: Icon, label, desc, checked, onChange }) => (
                     <div key={id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div className="space-y-1">
@@ -808,16 +864,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
               <CardContent className="space-y-4">
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg space-y-4">
                   <div>
-                    <h4 className="font-medium text-sm text-red-900">Reset Application Settings</h4>
+                    <h4 className="font-medium text-sm text-red-900">Clear All Data</h4>
                     <p className="text-xs text-red-700 mt-1">
-                      Clears all saved settings (General, Notifications, Security preferences) stored in this browser back to defaults.
-                      <strong> Database records on the server are NOT affected.</strong>
+                      Permanently deletes all products, suppliers, stock transactions, invoices and purchase orders from the database.
+                      <strong> User accounts are preserved. This action cannot be undone.</strong>
+                      {!isAdmin && <span className="block mt-1">Only Admin users can perform this action.</span>}
                     </p>
                   </div>
 
                   {clearStep === 0 ? (
-                    <Button variant="destructive" className="bg-red-600 hover:bg-red-700" onClick={handleClearData}>
-                      Clear All Settings
+                    <Button variant="destructive" className="bg-red-600 hover:bg-red-700" onClick={handleClearData} disabled={!isAdmin}>
+                      Clear All Data
                     </Button>
                   ) : (
                     <div className="space-y-3">
@@ -829,12 +886,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                           placeholder="Type DELETE"
                           className="border-red-300 focus:ring-red-500 max-w-[200px]"
                           onKeyDown={e => e.key === 'Enter' && handleClearData()}
+                          disabled={clearLoading}
                         />
                         <Button variant="destructive" className="bg-red-600 hover:bg-red-700"
-                          onClick={handleClearData} disabled={clearInput !== 'DELETE'}>
-                          Confirm Reset
+                          onClick={handleClearData} disabled={clearInput !== 'DELETE' || clearLoading}>
+                          {clearLoading ? 'Deleting…' : 'Confirm Delete'}
                         </Button>
-                        <Button variant="outline" onClick={() => { setClearStep(0); setClearInput(''); }}>
+                        <Button variant="outline" onClick={() => { setClearStep(0); setClearInput(''); }} disabled={clearLoading}>
                           Cancel
                         </Button>
                       </div>
@@ -849,9 +907,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
       {/* Global Save / Cancel */}
       <motion.div className="flex justify-end gap-3" variants={itemVariants}>
-        <Button variant="outline" onClick={handleCancelSettings}>Cancel</Button>
-        <Button className="bg-gradient-to-r from-[#1E90FF] to-[#1565C0] hover:opacity-90" onClick={handleSaveSettings}>
-          <Save className="w-4 h-4 mr-2" />Save Settings
+        <Button variant="outline" onClick={handleCancelSettings} disabled={settingsSaving}>Cancel</Button>
+        <Button className="bg-gradient-to-r from-[#1E90FF] to-[#1565C0] hover:opacity-90" onClick={handleSaveSettings} disabled={settingsSaving}>
+          <Save className="w-4 h-4 mr-2" />{settingsSaving ? 'Saving…' : 'Save Settings'}
         </Button>
       </motion.div>
     </motion.div>

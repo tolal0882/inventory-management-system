@@ -17,6 +17,7 @@ const AppContent: React.FC = () => {
   const {
     currentUser,
     login,
+    verify2FA,
     logout,
     updateCurrentUser,
     refreshData,
@@ -55,7 +56,7 @@ const AppContent: React.FC = () => {
   if (!currentUser) {
     return (
       <>
-        <LoginPage onLogin={login} />
+        <LoginPage onLogin={login} onVerify2FA={verify2FA} />
         <Toaster />
       </>
     );

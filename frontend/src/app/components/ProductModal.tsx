@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Product, PRODUCT_CATEGORIES } from '../types';
+import { useApp } from '../context/AppContext';
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface ProductModalProps {
 }
 
 export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSave, product }) => {
+  const { suppliers } = useApp();
   const [formData, setFormData] = useState<Partial<Product>>({
     sku: '',
     name: '',
@@ -25,6 +27,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
     status: 'Active',
     hasExpiration: false,
     expirationDate: '',
+    supplierId: '',
   });
 
   // Categories that typically need expiration tracking
@@ -45,6 +48,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
         status: 'Active',
         hasExpiration: false,
         expirationDate: '',
+        supplierId: '',
       });
     }
   }, [product, isOpen]);
@@ -63,6 +67,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
       status: formData.status || 'Active',
       hasExpiration: formData.hasExpiration || false,
       expirationDate: formData.hasExpiration ? formData.expirationDate : undefined,
+      supplierId: formData.supplierId || null,
     };
     onSave(productData);
   };
@@ -181,7 +186,24 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
                 </SelectContent>
               </Select>
             </div>
-            
+            <div className="space-y-2">
+              <Label htmlFor="supplier">Supplier</Label>
+              <Select
+                value={formData.supplierId || 'none'}
+                onValueChange={(value) => setFormData({ ...formData, supplierId: value === 'none' ? '' : value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a supplier" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No supplier</SelectItem>
+                  {suppliers.map(supplier => (
+                    <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Expiration Tracking Toggle */}
             <div className="space-y-2 md:col-span-2">
               <label className="flex items-center gap-2 cursor-pointer">
