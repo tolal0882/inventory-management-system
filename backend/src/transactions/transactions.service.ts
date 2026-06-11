@@ -110,6 +110,7 @@ export class TransactionsService {
         ...(dto.quantity !== undefined && { quantity: dto.quantity }),
         ...(dto.warehouse !== undefined && { warehouse: dto.warehouse }),
         ...(dto.note !== undefined && { note: dto.note }),
+        ...(dto.productName !== undefined && { productName: dto.productName }),
       },
     });
   }

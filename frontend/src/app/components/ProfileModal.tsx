@@ -33,11 +33,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   });
 
   useEffect(() => {
-    const savedPhone = localStorage.getItem(`phone_${currentUser.id}`) || '+855';
     setFormData({
       name: currentUser.name,
       email: currentUser.email,
-      phone: savedPhone,
+      phone: currentUser.phone || '+855',
       workplace: currentUser.workplace || 'Not specified',
       department: currentUser.department || 'Not specified',
     });
@@ -46,10 +45,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   const handleSave = async () => {
     try {
-      localStorage.setItem(`phone_${currentUser.id}`, formData.phone);
       await usersApi.update(currentUser.id, {
         name: formData.name,
         email: formData.email,
+        phone: formData.phone,
         workplace: formData.workplace,
         department: formData.department,
       });
@@ -58,6 +57,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           ...currentUser,
           name: formData.name,
           email: formData.email,
+          phone: formData.phone,
           workplace: formData.workplace,
           department: formData.department,
         });

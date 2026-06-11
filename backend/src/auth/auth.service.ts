@@ -130,7 +130,7 @@ export class AuthService {
       select: {
         id: true, name: true, email: true, role: true,
         status: true, workplace: true, department: true,
-        createdAt: true,
+        phone: true, createdAt: true,
       },
     });
     if (!user) throw new UnauthorizedException('User not found');

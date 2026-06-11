@@ -29,4 +29,8 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   department?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
 }

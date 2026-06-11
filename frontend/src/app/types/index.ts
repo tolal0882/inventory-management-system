@@ -12,6 +12,8 @@ export interface User {
   status: "Active" | "Inactive" | "Pending" | "PendingDeletion";
   workplace?: string; // Workplace/branch location
   department?: string; // Department within organization
+  phone?: string; // Contact phone number
+  createdAt?: string;
 }
 
 export interface Product {

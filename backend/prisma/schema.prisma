@@ -71,6 +71,7 @@ model User {
   status       UserStatus @default(Active)
   workplace    String?
   department   String?
+  phone        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 

@@ -7,7 +7,7 @@ import * as bcrypt from 'bcryptjs';
 
 const SELECT_USER = {
   id: true, name: true, email: true, role: true, status: true,
-  workplace: true, department: true, createdAt: true,
+  workplace: true, department: true, phone: true, createdAt: true,
 };
 
 @Injectable()

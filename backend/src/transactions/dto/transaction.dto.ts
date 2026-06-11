@@ -20,4 +20,5 @@ export class UpdateTransactionDto {
   @IsOptional() @IsNumber() @Min(1) quantity?: number;
   @IsOptional() @IsString() warehouse?: string;
   @IsOptional() @IsString() note?: string;
+  @IsOptional() @IsString() productName?: string;
 }
