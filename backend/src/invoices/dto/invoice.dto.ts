@@ -24,11 +24,15 @@ export class CreateInvoiceDto {
 }
 
 export class UpdateInvoiceDto {
+  @IsOptional() @IsString() supplierId?: string;
+  @IsOptional() @IsString() supplierName?: string;
   @IsOptional() @IsString() invoiceDate?: string;
   @IsOptional() @IsString() dueDate?: string;
   @IsOptional() @IsEnum(['Draft', 'Pending', 'Paid', 'Overdue', 'Cancelled']) status?: string;
   @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsString() attachmentUrl?: string;
   @IsOptional() @IsNumber() @Min(0) subtotal?: number;
   @IsOptional() @IsNumber() @Min(0) tax?: number;
   @IsOptional() @IsNumber() @Min(0) totalAmount?: number;
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => InvoiceItemDto) items?: InvoiceItemDto[];
 }
