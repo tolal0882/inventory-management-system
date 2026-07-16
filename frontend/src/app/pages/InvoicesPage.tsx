@@ -58,7 +58,7 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({
     setIsLoading(true);
     try {
       if (editingInvoice) {
-        const { id, invoiceNumber, createdBy, createdAt, updatedAt, items, ...updateData } = invoice as any;
+        const { id, invoiceNumber, createdBy, createdAt, updatedAt, items, supplierId, supplierName, ...updateData } = invoice as any;
         await invoicesApi.update(invoice.id, updateData);
         toast.success(`Invoice updated successfully`);
       } else {
