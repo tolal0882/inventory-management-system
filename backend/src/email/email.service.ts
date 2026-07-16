@@ -12,7 +12,7 @@ export class EmailService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          sender: { name: 'Inventory Pro', email: 'longtola0882@gmail.com' },
+          sender: { name: 'Inventory Pro', email: 'tolalong7@gmail.com' },
           to: [{ email: to, name }],
           subject: 'Your Password Reset Code — Inventory Pro',
           htmlContent: `
