@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -12,10 +14,23 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { AdminModule } from './admin/admin.module';
+import { Analytics } from "@vercel/analytics/next"
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
+    // Load environment variables from .env file
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+
+    // Rate limiting protection
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 120,
+      },
+    ]),
+
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -28,6 +43,12 @@ import { AdminModule } from './admin/admin.module';
     ActivityLogsModule,
     AdminModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

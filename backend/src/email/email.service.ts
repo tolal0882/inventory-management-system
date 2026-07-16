@@ -3,6 +3,7 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 @Injectable()
 export class EmailService {
   async sendOtpEmail(to: string, code: string, name: string) {
+    console.log("BREVO KEY:", process.env.BREVO_API_KEY);
     try {
       const response = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
@@ -11,7 +12,7 @@ export class EmailService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          sender: { name: 'Inventory Pro', email: 'tolalong7@gmail.com' },
+          sender: { name: 'Inventory Pro', email: 'longtola0882@gmail.com' },
           to: [{ email: to, name }],
           subject: 'Your Password Reset Code — Inventory Pro',
           htmlContent: `
