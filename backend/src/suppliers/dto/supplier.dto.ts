@@ -5,6 +5,7 @@ export class CreateSupplierDto {
   @IsString() @IsNotEmpty() contact: string;
   @IsEmail() email: string;
   @IsString() @IsNotEmpty() address: string;
+  @IsOptional() @IsString() description?: string;
   @IsOptional() productsSupplied?: string[];
 }
 
@@ -13,5 +14,6 @@ export class UpdateSupplierDto {
   @IsOptional() @IsString() contact?: string;
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() address?: string;
+  @IsOptional() @IsString() description?: string;
   @IsOptional() productsSupplied?: string[];
 }

@@ -19,6 +19,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     contact: '+855',
     email: '',
     address: '',
+    description: '',
     productsSupplied: [],
   });
 
@@ -34,6 +35,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         contact: '+855',
         email: '',
         address: '',
+        description: '',
         productsSupplied: [],
       });
       setProductsInput('');
@@ -49,6 +51,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
       contact: formData.contact || '+855',
       email: formData.email || '',
       address: formData.address || '',
+      description: formData.description || '',
       productsSupplied: productsInput.split(',').map(p => p.trim()).filter(p => p),
     };
     onSave(supplierData);
@@ -102,6 +105,16 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 rows={2}
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Notes about this supplier (optional)"
+                rows={2}
               />
             </div>
             <div className="space-y-2">
