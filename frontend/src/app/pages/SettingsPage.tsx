@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  Bell, Lock, Globe, Database, Mail,
+  Bell, Lock, Globe, Database,
   Shield, Smartphone, Download, Upload,
   Save, RefreshCw, AlertTriangle, Eye, EyeOff,
   CheckCircle, FileSpreadsheet, PackageOpen,
@@ -14,8 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import { User } from '../types';
-import { authApi, productsApi, usersApi, adminApi } from '../services/api';
+import { User, PRODUCT_CATEGORIES } from '../types';
+import { authApi, productsApi, usersApi, adminApi, settingsApi } from '../services/api';
 import { useApp } from '../context/AppContext';
 // @ts-ignore
 import * as XLSX from 'xlsx';
@@ -25,6 +25,8 @@ interface SettingsPageProps {
 }
 
 // ─── Defaults ─────────────────────────────────────────────────
+// Company-profile fields (General tab) are cosmetic/local-only — not part
+// of this pass, left as-is.
 const GENERAL_DEFAULTS = {
   companyName: 'Inventory Pro Co.,Ltd.',
   companyEmail: 'Inventorypro@gmail.com',
@@ -36,18 +38,12 @@ const GENERAL_DEFAULTS = {
   city: 'Phnom Penh',
   stateProvince: 'Toul Kork',
   zip: '12151',
-  lowStockThreshold: '20',
-  reorderPoint: 'min',
-  stockValuation: 'fifo',
-  defaultCategory: 'general',
 };
 
 const NOTIF_DEFAULTS = {
-  emailNotifications: true,
   lowStockAlerts: true,
   orderNotifications: true,
   pushNotifications: false,
-  emailDigest: 'daily',
 };
 
 const SECURITY_DEFAULTS = {
@@ -57,12 +53,7 @@ const SECURITY_DEFAULTS = {
   auditLogging: true,
 };
 
-const DATA_DEFAULTS = {
-  autoBackup: true,
-  backupFrequency: 'daily',
-};
-
-// ─── localStorage helpers ──────────────────────────────────────
+// ─── localStorage helpers (General tab only) ──────────────────
 const GENERAL_KEY = 'inv_settings_general';
 
 function loadFromStorage<T>(key: string, defaults: T): T {
@@ -78,14 +69,20 @@ function saveToStorage(key: string, value: object) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
 }
 
+function formatTs(iso: string) {
+  return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 // ─── Component ────────────────────────────────────────────────
 export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
-  const { products, suppliers, transactions, invoices, users, setProducts, updateCurrentUser, refreshData } = useApp();
+  const {
+    products, suppliers, transactions, invoices, users,
+    setProducts, updateCurrentUser, refreshData,
+    systemSettings, refreshSystemSettings,
+  } = useApp();
   const isAdmin = currentUser?.role === 'Admin';
-  const securityKey = `inv_settings_security_${currentUser?.id || 'default'}`;
-  const dataKey   = `inv_settings_data_${currentUser?.id || 'default'}`;
 
-  // ── General ───────────────────────────────────────────────
+  // ── General (company profile — unchanged, local-only) ──────
   const [companyName,      setCompanyName]      = useState(GENERAL_DEFAULTS.companyName);
   const [companyEmail,     setCompanyEmail]     = useState(GENERAL_DEFAULTS.companyEmail);
   const [phone,            setPhone]            = useState(GENERAL_DEFAULTS.phone);
@@ -96,19 +93,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
   const [city,             setCity]             = useState(GENERAL_DEFAULTS.city);
   const [stateProvince,    setStateProvince]    = useState(GENERAL_DEFAULTS.stateProvince);
   const [zip,              setZip]              = useState(GENERAL_DEFAULTS.zip);
-  const [lowStockThreshold,setLowStockThreshold]= useState(GENERAL_DEFAULTS.lowStockThreshold);
-  const [reorderPoint,     setReorderPoint]     = useState(GENERAL_DEFAULTS.reorderPoint);
-  const [stockValuation,   setStockValuation]   = useState(GENERAL_DEFAULTS.stockValuation);
-  const [defaultCategory,  setDefaultCategory]  = useState(GENERAL_DEFAULTS.defaultCategory);
 
-  // ── Notifications ─────────────────────────────────────────
-  const [emailNotifications, setEmailNotifications] = useState(NOTIF_DEFAULTS.emailNotifications);
+  // ── Inventory Preferences (real, system-wide, Admin writes) ─
+  const [lowStockThreshold, setLowStockThreshold] = useState(String(systemSettings.lowStockThresholdPercent));
+  const [defaultCategory,   setDefaultCategory]   = useState(systemSettings.defaultCategory);
+
+  // ── Notifications (real, per-user) ──────────────────────────
   const [lowStockAlerts,     setLowStockAlerts]     = useState(NOTIF_DEFAULTS.lowStockAlerts);
   const [orderNotifications, setOrderNotifications] = useState(NOTIF_DEFAULTS.orderNotifications);
   const [pushNotifications,  setPushNotifications]  = useState(NOTIF_DEFAULTS.pushNotifications);
-  const [emailDigest,        setEmailDigest]        = useState(NOTIF_DEFAULTS.emailDigest);
 
-  // ── Security ──────────────────────────────────────────────
+  // ── Security (real, per-user) ────────────────────────────────
   const [twoFactorAuth,   setTwoFactorAuth]   = useState(SECURITY_DEFAULTS.twoFactorAuth);
   const [sessionTimeout,  setSessionTimeout]  = useState(SECURITY_DEFAULTS.sessionTimeout);
   const [ipWhitelist,     setIpWhitelist]     = useState(SECURITY_DEFAULTS.ipWhitelist);
@@ -122,62 +117,55 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
   const [passwordLoading, setPasswordLoading] = useState(false);
 
   // ── Data & Backup ─────────────────────────────────────────
-  const [autoBackup,       setAutoBackup]       = useState(DATA_DEFAULTS.autoBackup);
-  const [backupFrequency,  setBackupFrequency]  = useState(DATA_DEFAULTS.backupFrequency);
   const [importLoading,    setImportLoading]    = useState(false);
+  const [backupLoading,    setBackupLoading]    = useState(false);
   const [lastExport,       setLastExport]       = useState<string>('—');
+  const [lastBackup,       setLastBackup]       = useState<string>('—');
   const [clearStep,        setClearStep]        = useState<0 | 1>(0);
   const [clearInput,       setClearInput]       = useState('');
   const [clearLoading,     setClearLoading]     = useState(false);
+  const [restoreFile,      setRestoreFile]      = useState<File | null>(null);
+  const [restoreInput,     setRestoreInput]     = useState('');
+  const [restoreLoading,   setRestoreLoading]   = useState(false);
   const [settingsSaving,   setSettingsSaving]   = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
+  const restoreRef = useRef<HTMLInputElement>(null);
 
-  // ── Load from localStorage ────────────────────────────────
+  // ── Load ─────────────────────────────────────────────────
   const applyGeneral = useCallback((g: typeof GENERAL_DEFAULTS) => {
     setCompanyName(g.companyName); setCompanyEmail(g.companyEmail); setPhone(g.phone);
     setTimezone(g.timezone); setCurrency(g.currency); setLanguage(g.language);
     setAddress(g.address); setCity(g.city); setStateProvince(g.stateProvince); setZip(g.zip);
-    setLowStockThreshold(g.lowStockThreshold); setReorderPoint(g.reorderPoint);
-    setStockValuation(g.stockValuation); setDefaultCategory(g.defaultCategory);
-  }, []);
-
-  const applyNotif = useCallback((n: typeof NOTIF_DEFAULTS) => {
-    setEmailNotifications(n.emailNotifications); setLowStockAlerts(n.lowStockAlerts);
-    setOrderNotifications(n.orderNotifications); setPushNotifications(n.pushNotifications);
-    setEmailDigest(n.emailDigest);
-  }, []);
-
-  const applySecurity = useCallback((s: typeof SECURITY_DEFAULTS) => {
-    setTwoFactorAuth(s.twoFactorAuth); setSessionTimeout(s.sessionTimeout);
-    setIpWhitelist(s.ipWhitelist); setAuditLogging(s.auditLogging);
-  }, []);
-
-  const applyData = useCallback((d: typeof DATA_DEFAULTS) => {
-    setAutoBackup(d.autoBackup); setBackupFrequency(d.backupFrequency);
   }, []);
 
   // Apply notification/security settings from the user's saved profile (backend)
   const applyFromUser = useCallback((user: User | null) => {
-    applyNotif({
-      emailNotifications: user?.emailNotifications ?? NOTIF_DEFAULTS.emailNotifications,
-      lowStockAlerts: user?.lowStockAlerts ?? NOTIF_DEFAULTS.lowStockAlerts,
-      orderNotifications: user?.orderNotifications ?? NOTIF_DEFAULTS.orderNotifications,
-      pushNotifications: user?.pushNotifications ?? NOTIF_DEFAULTS.pushNotifications,
-      emailDigest: user?.emailDigest ?? NOTIF_DEFAULTS.emailDigest,
-    });
-    applySecurity({
-      ...loadFromStorage(securityKey, SECURITY_DEFAULTS),
-      twoFactorAuth: user?.twoFactorEnabled ?? SECURITY_DEFAULTS.twoFactorAuth,
-    });
-  }, [applyNotif, applySecurity, securityKey]);
+    setLowStockAlerts(user?.lowStockAlerts ?? NOTIF_DEFAULTS.lowStockAlerts);
+    setOrderNotifications(user?.orderNotifications ?? NOTIF_DEFAULTS.orderNotifications);
+    setPushNotifications(user?.pushNotifications ?? NOTIF_DEFAULTS.pushNotifications);
+    setTwoFactorAuth(user?.twoFactorEnabled ?? SECURITY_DEFAULTS.twoFactorAuth);
+    setSessionTimeout(user?.sessionTimeoutMinutes != null ? String(user.sessionTimeoutMinutes) : 'never');
+    setIpWhitelist(user?.ipWhitelist ?? SECURITY_DEFAULTS.ipWhitelist);
+    setAuditLogging(user?.auditLoggingEnabled ?? SECURITY_DEFAULTS.auditLogging);
+  }, []);
+
+  const applyFromSystemSettings = useCallback((s: typeof systemSettings) => {
+    setLowStockThreshold(String(s.lowStockThresholdPercent));
+    setDefaultCategory(s.defaultCategory);
+  }, []);
 
   useEffect(() => {
     applyGeneral(loadFromStorage(GENERAL_KEY, GENERAL_DEFAULTS));
     applyFromUser(currentUser);
-    applyData(loadFromStorage(dataKey, DATA_DEFAULTS));
-    const ts = localStorage.getItem('inv_last_export');
-    if (ts) setLastExport(new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }));
-  }, [applyGeneral, applyFromUser, applyData, currentUser, dataKey]);
+    const exportTs = localStorage.getItem('inv_last_export');
+    if (exportTs) setLastExport(formatTs(exportTs));
+    const backupTs = localStorage.getItem('inv_last_backup');
+    if (backupTs) setLastBackup(formatTs(backupTs));
+  }, [applyGeneral, applyFromUser, currentUser]);
+
+  useEffect(() => {
+    applyFromSystemSettings(systemSettings);
+  }, [applyFromSystemSettings, systemSettings]);
 
   // ── Push notifications (browser) ──────────────────────────
   const handlePushToggle = async (checked: boolean) => {
@@ -198,32 +186,41 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
   // ── Save / Cancel ─────────────────────────────────────────
   const handleSaveSettings = async () => {
-    if (isAdmin) saveToStorage(GENERAL_KEY, { companyName, companyEmail, phone, timezone, currency, language, address, city, stateProvince, zip, lowStockThreshold, reorderPoint, stockValuation, defaultCategory });
-    saveToStorage(securityKey, { twoFactorAuth, sessionTimeout, ipWhitelist, auditLogging });
-    saveToStorage(dataKey, { autoBackup, backupFrequency });
+    if (isAdmin) saveToStorage(GENERAL_KEY, { companyName, companyEmail, phone, timezone, currency, language, address, city, stateProvince, zip });
 
-    if (currentUser) {
-      setSettingsSaving(true);
-      try {
-        const updated = await usersApi.update(currentUser.id, {
-          emailNotifications, lowStockAlerts, orderNotifications, pushNotifications, emailDigest,
-          twoFactorEnabled: twoFactorAuth,
+    if (!currentUser) { toast.success('Settings saved successfully'); return; }
+
+    setSettingsSaving(true);
+    try {
+      const updated = await usersApi.updateMySettings({
+        lowStockAlerts, orderNotifications, pushNotifications,
+        twoFactorEnabled: twoFactorAuth,
+        sessionTimeoutMinutes: sessionTimeout === 'never' ? null : Number(sessionTimeout),
+        ipWhitelist,
+        auditLoggingEnabled: auditLogging,
+      });
+      updateCurrentUser({ ...currentUser, ...updated });
+
+      if (isAdmin) {
+        await settingsApi.update({
+          lowStockThresholdPercent: Number(lowStockThreshold) || 0,
+          defaultCategory,
         });
-        updateCurrentUser({ ...currentUser, ...updated });
-      } catch (err: any) {
-        toast.error(err.message || 'Failed to save notification/security settings');
-        setSettingsSaving(false);
-        return;
+        await refreshSystemSettings();
       }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save settings');
       setSettingsSaving(false);
+      return;
     }
+    setSettingsSaving(false);
     toast.success('Settings saved successfully');
   };
 
   const handleCancelSettings = () => {
     applyGeneral(loadFromStorage(GENERAL_KEY, GENERAL_DEFAULTS));
     applyFromUser(currentUser);
-    applyData(loadFromStorage(dataKey, DATA_DEFAULTS));
+    applyFromSystemSettings(systemSettings);
     toast.info('Changes discarded');
   };
 
@@ -306,7 +303,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
       const now = new Date().toISOString();
       localStorage.setItem('inv_last_export', now);
-      setLastExport(new Date(now).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }));
+      setLastExport(formatTs(now));
 
       toast.success(
         `Exported ${products.length} products · ${suppliers.length} suppliers · ${transactions.length} transactions · ${invoices.length} invoices`
@@ -404,6 +401,56 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     }
   };
 
+  // ── Backup (real) ──────────────────────────────────────────
+  const handleCreateBackup = async () => {
+    setBackupLoading(true);
+    try {
+      await adminApi.backup();
+      const now = new Date().toISOString();
+      localStorage.setItem('inv_last_backup', now);
+      setLastBackup(formatTs(now));
+      toast.success('Backup downloaded');
+    } catch (err: any) {
+      toast.error(err.message || 'Backup failed');
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  // ── Restore from Backup (real, destructive) ────────────────
+  const handleRestoreClick = () => restoreRef.current?.click();
+
+  const handleRestoreFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setRestoreFile(file);
+    setRestoreInput('');
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!restoreFile) return;
+    if (restoreInput !== 'RESTORE') {
+      toast.error('Type RESTORE exactly to confirm');
+      return;
+    }
+    setRestoreLoading(true);
+    try {
+      const text = await restoreFile.text();
+      const parsed = JSON.parse(text);
+      await adminApi.restore(parsed);
+      await refreshData();
+      await refreshSystemSettings();
+      toast.success('Data restored from backup successfully');
+      setRestoreFile(null);
+      setRestoreInput('');
+    } catch (err: any) {
+      toast.error(err.message || 'Restore failed. Make sure this is a valid backup file.');
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
   // ── Clear All Data ────────────────────────────────────────
   const handleClearData = async () => {
     if (clearStep === 0) {
@@ -430,7 +477,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         .filter(k => k.startsWith('inv_settings'))
         .forEach(k => localStorage.removeItem(k));
       applyGeneral(GENERAL_DEFAULTS);
-      applyData(DATA_DEFAULTS);
 
       setClearStep(0);
       setClearInput('');
@@ -586,37 +632,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="low-stock-threshold">Low Stock Threshold (%)</Label>
-                    <Input id="low-stock-threshold" type="number" value={lowStockThreshold} onChange={e => setLowStockThreshold(e.target.value)} disabled={!isAdmin} className="focus:ring-[#1E90FF] disabled:bg-gray-50 disabled:text-gray-600 disabled:cursor-default" />
-                    <p className="text-xs text-gray-500">Alert when stock falls below this percentage of minimum stock</p>
+                    <Input id="low-stock-threshold" type="number" min="0" max="200" value={lowStockThreshold} onChange={e => setLowStockThreshold(e.target.value)} disabled={!isAdmin} className="focus:ring-[#1E90FF] disabled:bg-gray-50 disabled:text-gray-600 disabled:cursor-default" />
+                    <p className="text-xs text-gray-500">Flags a product as low stock once it's within this % above its minimum stock level — applies system-wide, on the Dashboard and in Notifications.</p>
                   </div>
-                  <div className="space-y-2"><Label htmlFor="reorder-point">Auto Reorder Point</Label>
-                    <Select value={reorderPoint} onValueChange={setReorderPoint} disabled={!isAdmin}>
-                      <SelectTrigger id="reorder-point" className="disabled:bg-gray-50 disabled:text-gray-600 disabled:cursor-default"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="min">At Minimum Stock</SelectItem>
-                        <SelectItem value="below">Below Minimum Stock</SelectItem>
-                        <SelectItem value="custom">Custom Threshold</SelectItem>
-                      </SelectContent>
-                    </Select></div>
-                  <div className="space-y-2"><Label htmlFor="stock-valuation">Stock Valuation Method</Label>
-                    <Select value={stockValuation} onValueChange={setStockValuation} disabled={!isAdmin}>
-                      <SelectTrigger id="stock-valuation" className="disabled:bg-gray-50 disabled:text-gray-600 disabled:cursor-default"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fifo">FIFO (First In, First Out)</SelectItem>
-                        <SelectItem value="lifo">LIFO (Last In, First Out)</SelectItem>
-                        <SelectItem value="avg">Average Cost</SelectItem>
-                      </SelectContent>
-                    </Select></div>
                   <div className="space-y-2"><Label htmlFor="default-category">Default Product Category</Label>
                     <Select value={defaultCategory} onValueChange={setDefaultCategory} disabled={!isAdmin}>
                       <SelectTrigger id="default-category" className="disabled:bg-gray-50 disabled:text-gray-600 disabled:cursor-default"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="general">General</SelectItem>
-                        <SelectItem value="electronics">Electronics</SelectItem>
-                        <SelectItem value="accessories">Accessories</SelectItem>
-                        <SelectItem value="supplies">Supplies</SelectItem>
+                        {PRODUCT_CATEGORIES.map(category => (
+                          <SelectItem key={category} value={category}>{category}</SelectItem>
+                        ))}
                       </SelectContent>
-                    </Select></div>
+                    </Select>
+                    <p className="text-xs text-gray-500">Pre-selected category when adding a new product.</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -631,10 +660,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   {[
-                    { id: 'email-notif', icon: Mail, label: 'Email Notifications', desc: 'Receive notifications via email', checked: emailNotifications, onChange: setEmailNotifications },
-                    { id: 'low-stock-alerts', icon: AlertTriangle, label: 'Low Stock Alerts', desc: 'Get notified when products are running low', checked: lowStockAlerts, onChange: setLowStockAlerts },
-                    { id: 'order-notif', icon: Shield, label: 'Order Notifications', desc: 'Alerts for new orders and shipments', checked: orderNotifications, onChange: setOrderNotifications },
-                    { id: 'push-notif', icon: Smartphone, label: 'Push Notifications', desc: 'Receive push notifications on your device', checked: pushNotifications, onChange: handlePushToggle },
+                    { id: 'low-stock-alerts', icon: AlertTriangle, label: 'Low Stock Alerts', desc: 'Show low-stock items in your Notifications bell', checked: lowStockAlerts, onChange: setLowStockAlerts },
+                    { id: 'order-notif', icon: Shield, label: 'Order Notifications', desc: 'Show pending stock/purchase-order approvals in your Notifications bell', checked: orderNotifications, onChange: setOrderNotifications },
+                    { id: 'push-notif', icon: Smartphone, label: 'Push Notifications', desc: 'Also fire a browser notification the moment a new alert appears', checked: pushNotifications, onChange: handlePushToggle },
                   ].map(({ id, icon: Icon, label, desc, checked, onChange }) => (
                     <div key={id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div className="space-y-1">
@@ -644,21 +672,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                       <Switch id={id} checked={checked} onCheckedChange={onChange} />
                     </div>
                   ))}
-                </div>
-                <div className="space-y-4 pt-4 border-t border-gray-200">
-                  <h4 className="font-medium text-sm text-gray-900">Notification Frequency</h4>
-                  <div className="space-y-2">
-                    <Label htmlFor="notification-frequency">Email Digest</Label>
-                    <Select value={emailDigest} onValueChange={setEmailDigest}>
-                      <SelectTrigger id="notification-frequency"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="realtime">Real-time</SelectItem>
-                        <SelectItem value="hourly">Hourly</SelectItem>
-                        <SelectItem value="daily">Daily Digest</SelectItem>
-                        <SelectItem value="weekly">Weekly Summary</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -675,7 +688,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                     <div className="space-y-1">
                       <Label htmlFor="two-factor" className="text-sm font-medium">Two-Factor Authentication</Label>
-                      <p className="text-xs text-gray-500">Add an extra layer of security to your account</p>
+                      <p className="text-xs text-gray-500">Requires an emailed code at login, in addition to your password</p>
                     </div>
                     <Switch id="two-factor" checked={twoFactorAuth} onCheckedChange={setTwoFactorAuth} />
                   </div>
@@ -709,6 +722,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                           <SelectItem value="never">Never</SelectItem>
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-gray-500">You'll be signed out automatically after this much time with no mouse/keyboard activity.</p>
                     </div>
                   </div>
                 </div>
@@ -723,12 +737,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                 <div className="space-y-2">
                   <Label htmlFor="ip-whitelist">IP Whitelist (Optional)</Label>
                   <Input id="ip-whitelist" placeholder="192.168.1.1, 10.0.0.1" value={ipWhitelist} onChange={e => setIpWhitelist(e.target.value)} className="focus:ring-[#1E90FF]" />
-                  <p className="text-xs text-gray-500">Comma-separated list of allowed IP addresses</p>
+                  <p className="text-xs text-gray-500">Comma-separated list of allowed IP addresses. Leave empty to allow login from anywhere.</p>
+                  <p className="text-xs text-amber-600">⚠ Enforced at login for your account only — double-check your current IP is included, or you'll lock yourself out.</p>
                 </div>
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div className="space-y-1">
                     <Label className="text-sm font-medium">Audit Logging</Label>
-                    <p className="text-xs text-gray-500">Track all user activities and changes</p>
+                    <p className="text-xs text-gray-500">Record your own login/logout activity in the audit trail</p>
                   </div>
                   <Switch checked={auditLogging} onCheckedChange={setAuditLogging} />
                 </div>
@@ -762,7 +777,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                 </div>
                 <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-400">
                   <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                  Live data · Last export: {lastExport}
+                  Live data · Last export: {lastExport} · Last backup: {lastBackup}
                 </div>
               </CardContent>
             </Card>
@@ -772,30 +787,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
           <motion.div variants={itemVariants}>
             <Card className="transition-all hover:shadow-md">
               <CardHeader><CardTitle className="flex items-center gap-2"><RefreshCw className="w-5 h-5 text-[#1E90FF]" />Backup Settings</CardTitle></CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div className="space-y-1">
-                    <Label htmlFor="auto-backup" className="text-sm font-medium">Automatic Backup</Label>
-                    <p className="text-xs text-gray-500">Schedule automatic data backups</p>
-                  </div>
-                  <Switch id="auto-backup" checked={autoBackup} onCheckedChange={setAutoBackup} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="backup-frequency">Backup Frequency</Label>
-                  <Select value={backupFrequency} onValueChange={setBackupFrequency} disabled={!autoBackup}>
-                    <SelectTrigger id="backup-frequency" className="disabled:bg-gray-50 disabled:cursor-default"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hourly">Every Hour</SelectItem>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                  Backup schedule is saved here and enforced by your server-side cron job. Use <strong>Export All Data</strong> below for an immediate manual backup.
-                </div>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Backups are manual — click <strong>Create Backup Now</strong> below to download a full snapshot of
+                  your products, suppliers, transactions, purchase orders, and invoices as a JSON file. There is no
+                  automatic/scheduled backup: this app has no server-side job scheduler and no cloud storage
+                  configured to hold scheduled backup files.
+                </p>
+                <Button className="bg-gradient-to-r from-[#1E90FF] to-[#1565C0] hover:opacity-90" onClick={handleCreateBackup} disabled={backupLoading}>
+                  <Download className="w-4 h-4 mr-2" />{backupLoading ? 'Preparing…' : 'Create Backup Now (.json)'}
+                </Button>
               </CardContent>
             </Card>
           </motion.div>
@@ -841,13 +842,44 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                   <div>
                     <h4 className="font-medium text-sm text-gray-900">Restore from Backup</h4>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      To restore from a previous backup, use <strong>Import Products</strong> above with your exported file.
-                      Full database restoration (all tables) requires direct server/database access.
+                      Upload a <strong>.json</strong> file created by Create Backup Now. This <strong>replaces</strong> all
+                      current products, suppliers, transactions, purchase orders, and invoices with the contents of the
+                      backup. User accounts are not affected — but the backup must reference users that still exist.
                     </p>
                   </div>
-                  <Button variant="outline" className="border-gray-300 text-gray-600 hover:bg-gray-50 w-full sm:w-auto" onClick={handleExportAllData}>
-                    <RefreshCw className="w-4 h-4 mr-2" />Create Backup Now
-                  </Button>
+
+                  {!restoreFile ? (
+                    <>
+                      <input ref={restoreRef} type="file" accept=".json" className="hidden" onChange={handleRestoreFileSelect} />
+                      <Button variant="outline" className="border-gray-300 text-gray-600 hover:bg-gray-50 w-full sm:w-auto" onClick={handleRestoreClick}>
+                        <RefreshCw className="w-4 h-4 mr-2" />Choose Backup File to Restore
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg space-y-3">
+                      <p className="text-sm text-red-900">
+                        About to restore from <strong>{restoreFile.name}</strong> — this will permanently replace all current
+                        inventory data. Type <code className="bg-red-100 px-1 rounded">RESTORE</code> to confirm:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Input
+                          value={restoreInput}
+                          onChange={e => setRestoreInput(e.target.value)}
+                          placeholder="Type RESTORE"
+                          className="border-red-300 focus:ring-red-500 max-w-[200px]"
+                          onKeyDown={e => e.key === 'Enter' && handleConfirmRestore()}
+                          disabled={restoreLoading}
+                        />
+                        <Button variant="destructive" className="bg-red-600 hover:bg-red-700"
+                          onClick={handleConfirmRestore} disabled={restoreInput !== 'RESTORE' || restoreLoading}>
+                          {restoreLoading ? 'Restoring…' : 'Confirm Restore'}
+                        </Button>
+                        <Button variant="outline" onClick={() => { setRestoreFile(null); setRestoreInput(''); }} disabled={restoreLoading}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
@@ -32,6 +33,7 @@ const AppContent: React.FC = () => {
     userActivityLogs,
     invoices,
     setInvoices,
+    systemSettings,
   } = useApp();
 
   // After any mutation the page updates its specific resource immediately,
@@ -47,6 +49,31 @@ const AppContent: React.FC = () => {
     await logout();
     setCurrentPage('dashboard');
   };
+
+  // Auto-logout after inactivity, per the user's own Session Timeout
+  // preference. `sessionTimeoutMinutes` of null/undefined means "Never".
+  useEffect(() => {
+    const timeoutMinutes = currentUser?.sessionTimeoutMinutes;
+    if (!currentUser || !timeoutMinutes) return;
+
+    let lastActivity = Date.now();
+    const markActivity = () => { lastActivity = Date.now(); };
+    const events: (keyof WindowEventMap)[] = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach(e => window.addEventListener(e, markActivity, { passive: true }));
+
+    const checkInterval = setInterval(() => {
+      if (Date.now() - lastActivity >= timeoutMinutes * 60 * 1000) {
+        toast.info('You have been logged out due to inactivity');
+        handleLogout();
+      }
+    }, 15_000);
+
+    return () => {
+      events.forEach(e => window.removeEventListener(e, markActivity));
+      clearInterval(checkInterval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.sessionTimeoutMinutes]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -66,7 +93,7 @@ const AppContent: React.FC = () => {
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <DashboardPage products={products} transactions={transactions} />;
+        return <DashboardPage products={products} transactions={transactions} systemSettings={systemSettings} />;
       case 'products':
         return <ProductsPage
           products={products}
@@ -100,7 +127,7 @@ const AppContent: React.FC = () => {
       case 'settings':
         return <SettingsPage currentUser={currentUser} />;
       default:
-        return <DashboardPage products={products} transactions={transactions} />;
+        return <DashboardPage products={products} transactions={transactions} systemSettings={systemSettings} />;
     }
   };
 
@@ -126,6 +153,8 @@ const AppContent: React.FC = () => {
           invoices={invoices}
           onNavigate={setCurrentPage}
           currentPage={currentPage}
+          currentUser={currentUser}
+          systemSettings={systemSettings}
         />
 
         {/* Page content */}

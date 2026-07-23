@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Package, AlertTriangle, CheckCircle, ShoppingCart, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -6,7 +6,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { Product, StockTransaction } from '../types';
+import { Product, StockTransaction, User, SystemSettings } from '../types';
 import { toast } from 'sonner';
 
 interface Notification {
@@ -27,16 +27,29 @@ interface NotificationsDropdownProps {
   products: Product[];
   transactions: StockTransaction[];
   onNavigate?: (page: string, itemId?: string) => void;
+  currentUser?: User | null;
+  systemSettings?: SystemSettings;
 }
 
 export const NotificationsDropdown: React.FC<NotificationsDropdownProps> = ({
   products,
   transactions,
   onNavigate,
+  currentUser = null,
+  systemSettings,
 }) => {
   const [readNotifications, setReadNotifications] = useState<Set<string>>(new Set());
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const seenIdsRef = useRef<Set<string> | null>(null);
+
+  // Preferences default to "on" so notifications behave the same as
+  // before for any account that hasn't saved a preference yet.
+  const lowStockAlertsEnabled = currentUser?.lowStockAlerts ?? true;
+  const orderNotificationsEnabled = currentUser?.orderNotifications ?? true;
+  const thresholdPercent = systemSettings?.lowStockThresholdPercent ?? 0;
+
+  const isLowStock = (p: Product) => p.stockQuantity < p.minStock * (1 + thresholdPercent / 100);
 
   // Reset expanded state when dropdown closes
   useEffect(() => {
@@ -49,37 +62,41 @@ export const NotificationsDropdown: React.FC<NotificationsDropdownProps> = ({
   const generateNotifications = (): Notification[] => {
     const notifications: Notification[] = [];
 
-    // Low stock notifications - ALL of them
-    const lowStockProducts = products.filter(p => p.stockQuantity < p.minStock && p.status === 'Active');
-    lowStockProducts.forEach((product, index) => {
-      notifications.push({
-        id: `low-stock-${product.id}`,
-        type: 'low_stock',
-        title: 'Low Stock Alert',
-        message: `${product.name} is below minimum stock (${product.stockQuantity}/${product.minStock})`,
-        time: `${2 + index} min ago`,
-        read: readNotifications.has(`low-stock-${product.id}`),
-        icon: 'alert',
-        severity: 'warning',
-        productId: product.id,
-        targetPage: 'products',
+    // Low stock notifications - ALL of them (unless the user turned this off)
+    if (lowStockAlertsEnabled) {
+      const lowStockProducts = products.filter(p => isLowStock(p) && p.status === 'Active');
+      lowStockProducts.forEach((product, index) => {
+        notifications.push({
+          id: `low-stock-${product.id}`,
+          type: 'low_stock',
+          title: 'Low Stock Alert',
+          message: `${product.name} is below minimum stock (${product.stockQuantity}/${product.minStock})`,
+          time: `${2 + index} min ago`,
+          read: readNotifications.has(`low-stock-${product.id}`),
+          icon: 'alert',
+          severity: 'warning',
+          productId: product.id,
+          targetPage: 'products',
+        });
       });
-    });
+    }
 
-    // Pending approval notifications
-    const pendingTransactions = transactions.filter(t => t.status === 'Pending');
-    if (pendingTransactions.length > 0) {
-      notifications.push({
-        id: 'pending-approvals',
-        type: 'pending_approval',
-        title: 'Pending Approvals',
-        message: `${pendingTransactions.length} transaction(s) awaiting approval`,
-        time: '5 min ago',
-        read: readNotifications.has('pending-approvals'),
-        icon: 'check',
-        severity: 'info',
-        targetPage: 'stock',
-      });
+    // Pending approval notifications (order/stock-in approvals — unless turned off)
+    if (orderNotificationsEnabled) {
+      const pendingTransactions = transactions.filter(t => t.status === 'Pending');
+      if (pendingTransactions.length > 0) {
+        notifications.push({
+          id: 'pending-approvals',
+          type: 'pending_approval',
+          title: 'Pending Approvals',
+          message: `${pendingTransactions.length} transaction(s) awaiting approval`,
+          time: '5 min ago',
+          read: readNotifications.has('pending-approvals'),
+          icon: 'check',
+          severity: 'info',
+          targetPage: 'stock',
+        });
+      }
     }
 
     // Expiring soon notifications - ALL of them
@@ -130,6 +147,29 @@ export const NotificationsDropdown: React.FC<NotificationsDropdownProps> = ({
   const allNotifications = generateNotifications();
   const displayedNotifications = isExpanded ? allNotifications : allNotifications.slice(0, 5);
   const unreadCount = allNotifications.filter(n => !n.read).length;
+
+  // Real-time browser notifications: whenever a notification appears that
+  // wasn't there on the previous render (e.g. the 15s data poll picked up
+  // a new low-stock item), fire a native browser notification — but only
+  // if the user has Push Notifications on and already granted permission.
+  useEffect(() => {
+    const currentIds = new Set(allNotifications.map(n => n.id));
+    const previousIds = seenIdsRef.current;
+    seenIdsRef.current = currentIds;
+
+    // Skip on first run (previousIds === null) — otherwise every
+    // pre-existing notification would fire a browser popup on load.
+    if (previousIds === null) return;
+    if (!currentUser?.pushNotifications) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    for (const n of allNotifications) {
+      if (!previousIds.has(n.id)) {
+        new Notification(n.title, { body: n.message });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allNotifications.map(n => n.id).join(',')]);
 
   const handleMarkAsRead = (id: string) => {
     setReadNotifications(prev => new Set([...prev, id]));

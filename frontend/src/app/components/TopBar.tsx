@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, Menu, Package, Truck, FileText, TrendingUp, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Product, StockTransaction, Supplier, Invoice } from '../types';
+import { Product, StockTransaction, Supplier, Invoice, User, SystemSettings } from '../types';
 import { NotificationsDropdown } from './NotificationsDropdown';
 
 interface TopBarProps {
@@ -12,6 +12,8 @@ interface TopBarProps {
   invoices?: Invoice[];
   onNavigate?: (page: string, itemId?: string) => void;
   currentPage?: string;
+  currentUser?: User | null;
+  systemSettings?: SystemSettings;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -22,6 +24,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   invoices = [],
   onNavigate,
   currentPage,
+  currentUser = null,
+  systemSettings,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -266,6 +270,8 @@ export const TopBar: React.FC<TopBarProps> = ({
             products={products}
             transactions={transactions}
             onNavigate={onNavigate}
+            currentUser={currentUser}
+            systemSettings={systemSettings}
           />
         </div>
       </div>

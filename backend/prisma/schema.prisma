@@ -74,12 +74,13 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  emailNotifications Boolean @default(true)
-  lowStockAlerts     Boolean @default(true)
-  orderNotifications Boolean @default(true)
-  pushNotifications  Boolean @default(false)
-  emailDigest        String  @default("daily")
-  twoFactorEnabled   Boolean @default(false)
+  lowStockAlerts       Boolean  @default(true)
+  orderNotifications   Boolean  @default(true)
+  pushNotifications    Boolean  @default(false)
+  twoFactorEnabled     Boolean  @default(false)
+  sessionTimeoutMinutes Int?    @default(30)
+  ipWhitelist          String?
+  auditLoggingEnabled  Boolean  @default(true)
 
   transactions     StockTransaction[]
   purchaseOrders   PurchaseOrder[]
@@ -243,4 +244,12 @@ model OtpRecord {
   createdAt DateTime @default(now())
 
   @@index([email])
+}
+
+// Single-row system-wide config, always read/written at id "system"
+model SystemSettings {
+  id                       String   @id @default("system")
+  lowStockThresholdPercent Int      @default(20)
+  defaultCategory          String   @default("Other")
+  updatedAt                DateTime @updatedAt
 }

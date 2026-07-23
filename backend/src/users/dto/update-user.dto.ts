@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -36,10 +36,6 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsBoolean()
-  emailNotifications?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
   lowStockAlerts?: boolean;
 
   @IsOptional()
@@ -51,10 +47,21 @@ export class UpdateUserDto {
   pushNotifications?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  twoFactorEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(480)
+  sessionTimeoutMinutes?: number | null;
+
+  @IsOptional()
   @IsString()
-  emailDigest?: string;
+  @MaxLength(500)
+  ipWhitelist?: string;
 
   @IsOptional()
   @IsBoolean()
-  twoFactorEnabled?: boolean;
+  auditLoggingEnabled?: boolean;
 }

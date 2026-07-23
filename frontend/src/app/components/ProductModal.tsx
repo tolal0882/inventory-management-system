@@ -16,11 +16,12 @@ interface ProductModalProps {
 }
 
 export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSave, product }) => {
-  const { suppliers } = useApp();
+  const { suppliers, systemSettings } = useApp();
+  const defaultCategory = systemSettings.defaultCategory || 'Electronics';
   const [formData, setFormData] = useState<Partial<Product>>({
     sku: '',
     name: '',
-    category: 'Electronics',
+    category: defaultCategory,
     unit: 'Piece',
     costPrice: 0,
     stockQuantity: 0,
@@ -41,7 +42,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
       setFormData({
         sku: '',
         name: '',
-        category: 'Electronics',
+        category: defaultCategory,
         unit: 'Piece',
         costPrice: 0,
         stockQuantity: 0,
@@ -52,6 +53,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onS
         supplierId: '',
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {

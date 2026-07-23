@@ -2,20 +2,23 @@ import React, { useMemo } from 'react';
 import { Package, AlertTriangle, DollarSign, TrendingDown, CalendarClock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Product, StockTransaction } from '../types';
+import { Product, StockTransaction, SystemSettings } from '../types';
 import { Badge } from '../components/ui/badge';
 import { motion } from 'motion/react';
 
 interface DashboardPageProps {
   products: Product[];
   transactions: StockTransaction[];
+  systemSettings?: SystemSettings;
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ products, transactions }) => {
+export const DashboardPage: React.FC<DashboardPageProps> = ({ products, transactions, systemSettings }) => {
   // Calculate inventory management stats
+  const thresholdPercent = systemSettings?.lowStockThresholdPercent ?? 0;
+  const isLowStock = (p: Product) => p.stockQuantity < p.minStock * (1 + thresholdPercent / 100);
   const totalProducts = products.length;
   const totalStock = products.reduce((sum, p) => sum + p.stockQuantity, 0);
-  const lowStockItems = products.filter(p => p.stockQuantity < p.minStock);
+  const lowStockItems = products.filter(isLowStock);
   const totalStockValue = products.reduce((sum, p) => sum + (p.stockQuantity * p.costPrice), 0);
   
   // Inventory turnover ratio (last 30 days)

@@ -158,10 +158,18 @@ export const usersApi = {
   getOne: (id: string) => request<any>(`/users/${id}`),
   create: (data: any) => request<any>('/users', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => request<any>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateMySettings: (data: any) => request<any>('/users/me/settings', { method: 'PUT', body: JSON.stringify(data) }),
   approve: (id: string) => request<any>(`/users/${id}/approve`, { method: 'PUT' }),
   requestDelete: (id: string) => request<any>(`/users/${id}/request-delete`, { method: 'PUT' }),
   cancelDelete: (id: string) => request<any>(`/users/${id}/cancel-delete`, { method: 'PUT' }),
   delete: (id: string) => request<any>(`/users/${id}`, { method: 'DELETE' }),
+};
+
+// ─── System Settings ─────────────────────────────────────────
+export const settingsApi = {
+  get: () => request<{ lowStockThresholdPercent: number; defaultCategory: string }>('/settings'),
+  update: (data: { lowStockThresholdPercent?: number; defaultCategory?: string }) =>
+    request<any>('/settings', { method: 'PUT', body: JSON.stringify(data) }),
 };
 
 // ─── Dashboard ───────────────────────────────────────────────
@@ -183,4 +191,32 @@ export const activityLogsApi = {
 // ─── Admin ───────────────────────────────────────────────────
 export const adminApi = {
   clearData: () => request<{ message: string }>('/admin/clear-data', { method: 'DELETE' }),
+
+  // Downloads the backup JSON directly to the browser (needs the auth
+  // header, so a plain <a href> won't work — fetch as a blob instead).
+  backup: async (): Promise<void> => {
+    const token = getToken();
+    const res = await fetch(`${BASE_URL}/admin/backup`, {
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: 'Backup failed' }));
+      throw new Error(error.message || `HTTP ${res.status}`);
+    }
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="(.+)"/);
+    const filename = match?.[1] || `inventory_backup_${new Date().toISOString().split('T')[0]}.json`;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  restore: (backup: any) =>
+    request<{ message: string }>('/admin/restore', { method: 'POST', body: JSON.stringify(backup) }),
 };

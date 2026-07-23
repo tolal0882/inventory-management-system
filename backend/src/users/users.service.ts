@@ -2,14 +2,16 @@ import { Injectable, ConflictException, NotFoundException, ForbiddenException } 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateOwnSettingsDto } from './dto/update-own-settings.dto';
 import { UserRole, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const SELECT_USER = {
   id: true, name: true, email: true, role: true, status: true,
   workplace: true, department: true, phone: true, createdAt: true,
-  emailNotifications: true, lowStockAlerts: true, orderNotifications: true,
-  pushNotifications: true, emailDigest: true, twoFactorEnabled: true,
+  lowStockAlerts: true, orderNotifications: true, pushNotifications: true,
+  twoFactorEnabled: true, sessionTimeoutMinutes: true, ipWhitelist: true,
+  auditLoggingEnabled: true,
 };
 
 @Injectable()
@@ -92,6 +94,13 @@ export class UsersService {
     if (status) data.status = status as UserStatus;
     if (password) data.password = await bcrypt.hash(password, 10);
     return this.prisma.user.update({ where: { id }, data, select: SELECT_USER });
+  }
+
+  // Self-service only — id always comes from the JWT (req.user.id) in the
+  // controller, never from a URL param, so a non-Admin can only ever touch
+  // their own row here.
+  async updateOwnSettings(id: string, dto: UpdateOwnSettingsDto) {
+    return this.prisma.user.update({ where: { id }, data: dto, select: SELECT_USER });
   }
 
   async remove(id: string) {

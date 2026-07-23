@@ -14,12 +14,18 @@ export interface User {
   department?: string; // Department within organization
   phone?: string; // Contact phone number
   createdAt?: string;
-  emailNotifications?: boolean;
   lowStockAlerts?: boolean;
   orderNotifications?: boolean;
   pushNotifications?: boolean;
-  emailDigest?: string;
   twoFactorEnabled?: boolean;
+  sessionTimeoutMinutes?: number | null; // null/undefined = never auto-logout
+  ipWhitelist?: string; // comma-separated; empty = unrestricted
+  auditLoggingEnabled?: boolean;
+}
+
+export interface SystemSettings {
+  lowStockThresholdPercent: number;
+  defaultCategory: string;
 }
 
 export interface Product {

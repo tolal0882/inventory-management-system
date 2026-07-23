@@ -14,6 +14,7 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { AdminModule } from './admin/admin.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AdminModule } from './admin/admin.module';
     DashboardModule,
     ActivityLogsModule,
     AdminModule,
+    SettingsModule,
   ],
 
   providers: [

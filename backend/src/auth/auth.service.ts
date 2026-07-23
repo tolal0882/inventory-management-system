@@ -13,6 +13,17 @@ export class AuthService {
     private emailService: EmailService,
   ) {}
 
+  // Empty/unset whitelist = unrestricted. Never let a malformed value
+  // accidentally lock everyone out — only enforce when there's at least
+  // one real entry to check against.
+  private checkIpAllowed(user: { ipWhitelist: string | null }, ip?: string) {
+    const allowed = (user.ipWhitelist || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (allowed.length === 0) return;
+    if (!ip || !allowed.includes(ip)) {
+      throw new UnauthorizedException('Login not allowed from this IP address');
+    }
+  }
+
   async login(dto: LoginDto, ip?: string, device?: string) {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
 
@@ -24,6 +35,8 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    this.checkIpAllowed(user, ip);
 
     if (user.twoFactorEnabled) {
       await this.prisma.otpRecord.updateMany({
@@ -40,16 +53,18 @@ export class AuthService {
       return { requires2FA: true, email: user.email };
     }
 
-    await this.prisma.userActivityLog.create({
-      data: {
-        userId: user.id,
-        userName: user.name,
-        action: 'Login',
-        ipAddress: ip || 'Unknown',
-        device: device || 'Unknown',
-        location: 'Unknown',
-      },
-    });
+    if (user.auditLoggingEnabled) {
+      await this.prisma.userActivityLog.create({
+        data: {
+          userId: user.id,
+          userName: user.name,
+          action: 'Login',
+          ipAddress: ip || 'Unknown',
+          device: device || 'Unknown',
+          location: 'Unknown',
+        },
+      });
+    }
 
     const payload = { sub: user.id, email: user.email, role: user.role };
     const token = this.jwtService.sign(payload);
@@ -78,16 +93,20 @@ export class AuthService {
 
     await this.prisma.otpRecord.update({ where: { id: otp.id }, data: { used: true } });
 
-    await this.prisma.userActivityLog.create({
-      data: {
-        userId: user.id,
-        userName: user.name,
-        action: 'Login',
-        ipAddress: ip || 'Unknown',
-        device: device || 'Unknown',
-        location: 'Unknown',
-      },
-    });
+    this.checkIpAllowed(user, ip);
+
+    if (user.auditLoggingEnabled) {
+      await this.prisma.userActivityLog.create({
+        data: {
+          userId: user.id,
+          userName: user.name,
+          action: 'Login',
+          ipAddress: ip || 'Unknown',
+          device: device || 'Unknown',
+          location: 'Unknown',
+        },
+      });
+    }
 
     const payload = { sub: user.id, email: user.email, role: user.role };
     const token = this.jwtService.sign(payload);
@@ -97,7 +116,7 @@ export class AuthService {
 
   async logout(userId: string, ip?: string, device?: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (user) {
+    if (user && user.auditLoggingEnabled) {
       await this.prisma.userActivityLog.create({
         data: {
           userId: user.id,
@@ -184,8 +203,9 @@ export class AuthService {
         id: true, name: true, email: true, role: true,
         status: true, workplace: true, department: true,
         phone: true, createdAt: true,
-        emailNotifications: true, lowStockAlerts: true, orderNotifications: true,
-        pushNotifications: true, emailDigest: true, twoFactorEnabled: true,
+        lowStockAlerts: true, orderNotifications: true, pushNotifications: true,
+        twoFactorEnabled: true, sessionTimeoutMinutes: true, ipWhitelist: true,
+        auditLoggingEnabled: true,
       },
     });
     if (!user) throw new UnauthorizedException('User not found');

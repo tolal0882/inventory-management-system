@@ -1,9 +1,15 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Trust the first proxy hop (Railway) so req.ip reflects the real client
+  // IP from X-Forwarded-For instead of the proxy's internal address —
+  // needed for the IP whitelist login check to work correctly in production.
+  app.set('trust proxy', 1);
 
   // Global validation pipe
   app.useGlobalPipes(

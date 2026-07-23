@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { User, Product, Supplier, StockTransaction, UserActivityLog, Invoice } from '../types';
-import { authApi, productsApi, suppliersApi, transactionsApi, usersApi, invoicesApi } from '../services/api';
+import { User, Product, Supplier, StockTransaction, UserActivityLog, Invoice, SystemSettings } from '../types';
+import { authApi, productsApi, suppliersApi, transactionsApi, usersApi, invoicesApi, settingsApi } from '../services/api';
+
+const DEFAULT_SYSTEM_SETTINGS: SystemSettings = { lowStockThresholdPercent: 20, defaultCategory: 'Other' };
 
 const USER_STORAGE_KEY = 'inv_auth_user';
 
@@ -46,6 +48,8 @@ interface AppContextType {
   setUserActivityLogs: React.Dispatch<React.SetStateAction<UserActivityLog[]>>;
   invoices: Invoice[];
   setInvoices: React.Dispatch<React.SetStateAction<Invoice[]>>;
+  systemSettings: SystemSettings;
+  refreshSystemSettings: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -62,28 +66,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [users, setUsers] = useState<User[]>([]);
   const [userActivityLogs, setUserActivityLogs] = useState<UserActivityLog[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>(DEFAULT_SYSTEM_SETTINGS);
 
   // Keep a ref so polling always sees the current user without re-registering the interval
   const currentUserRef = React.useRef<User | null>(null);
   currentUserRef.current = currentUser;
 
   const loadAllData = async (user: User) => {
-    const [prods, supps, txns, invs] = await Promise.all([
+    const [prods, supps, txns, invs, sysSettings] = await Promise.all([
       productsApi.getAll(),
       suppliersApi.getAll(),
       transactionsApi.getAll(),
       invoicesApi.getAll(),
+      settingsApi.get().catch(() => DEFAULT_SYSTEM_SETTINGS),
     ]);
     setProducts(prods);
     setSuppliers(supps);
     setTransactions(txns);
     setInvoices(invs);
+    setSystemSettings(sysSettings);
 
     if (user.role === 'Admin' || user.role === 'Auditor' || user.role === 'Warehouse_Manager') {
       const usrs = await usersApi.getAll();
       setUsers(usrs);
     }
   };
+
+  const refreshSystemSettings = useCallback(async () => {
+    try { setSystemSettings(await settingsApi.get()); } catch { /* keep current value */ }
+  }, []);
 
   // Callable refresh — pages can call this after mutations so others see changes sooner
   const refreshData = useCallback(async () => {
@@ -182,6 +193,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setInvoices([]);
     setUsers([]);
     setUserActivityLogs([]);
+    setSystemSettings(DEFAULT_SYSTEM_SETTINGS);
   }, []);
 
   const updateCurrentUser = useCallback((user: User) => {
@@ -224,6 +236,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setUserActivityLogs,
         invoices,
         setInvoices,
+        systemSettings,
+        refreshSystemSettings,
       }}
     >
       {children}
