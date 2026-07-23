@@ -12,7 +12,7 @@ export class EmailService {
         },
         body: JSON.stringify({
           sender: {
-            name: 'Inventory Pro',
+            name: process.env.BREVO_SENDER_NAME || 'Inventory Pro',
             email: process.env.BREVO_SENDER_EMAIL,
           },
           to: [{ email: to, name }],

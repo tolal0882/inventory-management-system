@@ -74,10 +74,11 @@ export class InvoicesService {
 
   async update(id: string, dto: UpdateInvoiceDto) {
     await this.findOne(id);
+    const { items, ...rest } = dto;
     const invoice = await this.prisma.invoice.update({
       where: { id },
       data: {
-        ...dto,
+        ...rest,
         ...(dto.invoiceDate && { invoiceDate: new Date(dto.invoiceDate) }),
         ...(dto.dueDate && { dueDate: new Date(dto.dueDate) }),
         status: dto.status as any,

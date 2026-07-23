@@ -194,7 +194,6 @@ model Invoice {
   totalAmount   Float
   status        InvoiceStatus @default(Draft)
   notes         String?
-  attachmentUrl String?
   createdById   String
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

@@ -132,7 +132,6 @@ export interface Invoice {
   totalAmount: number;
   status: 'Draft' | 'Pending' | 'Paid' | 'Overdue' | 'Cancelled';
   notes: string;
-  attachmentUrl?: string;
   createdBy: string;
   createdAt: string;
 }

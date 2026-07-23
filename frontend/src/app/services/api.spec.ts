@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { authApi, productsApi, suppliersApi, transactionsApi, invoicesApi, usersApi } from './api';
+import { authApi, productsApi, suppliersApi, usersApi } from './api';
 
 // ── Setup ─────────────────────────────────────────────────────
 const TOKEN = 'test-jwt-token';

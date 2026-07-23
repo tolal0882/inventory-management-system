@@ -1,14 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { Download, FileText, TrendingUp, Package, BarChart3, DollarSign, AlertTriangle } from 'lucide-react';
+import { Download, FileText, Package, AlertTriangle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Product, StockTransaction, Supplier, AuditLog } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Badge } from '../components/ui/badge';
-import { toast } from 'sonner';
 import { ReportPreviewModal } from '../components/ReportPreviewModal';
 import { motion } from 'motion/react';
 

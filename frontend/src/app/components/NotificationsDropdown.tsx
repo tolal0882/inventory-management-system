@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Package, AlertTriangle, CheckCircle, ShoppingCart, X, Check, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { Bell, Package, AlertTriangle, CheckCircle, ShoppingCart, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { Badge } from './ui/badge';
-import { Product, StockTransaction, PurchaseOrder } from '../types';
+import { Product, StockTransaction } from '../types';
 import { toast } from 'sonner';
 
 interface Notification {

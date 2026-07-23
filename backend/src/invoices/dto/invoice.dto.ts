@@ -20,7 +20,6 @@ export class CreateInvoiceDto {
   @IsNumber() @Min(0) totalAmount: number;
   @IsOptional() @IsEnum(['Draft', 'Pending', 'Paid', 'Overdue', 'Cancelled']) status?: string;
   @IsOptional() @IsString() notes?: string;
-  @IsOptional() @IsString() attachmentUrl?: string;
 }
 
 export class UpdateInvoiceDto {
@@ -30,7 +29,6 @@ export class UpdateInvoiceDto {
   @IsOptional() @IsString() dueDate?: string;
   @IsOptional() @IsEnum(['Draft', 'Pending', 'Paid', 'Overdue', 'Cancelled']) status?: string;
   @IsOptional() @IsString() notes?: string;
-  @IsOptional() @IsString() attachmentUrl?: string;
   @IsOptional() @IsNumber() @Min(0) subtotal?: number;
   @IsOptional() @IsNumber() @Min(0) tax?: number;
   @IsOptional() @IsNumber() @Min(0) totalAmount?: number;
