@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -26,28 +26,40 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   products,
   currentUserName
 }) => {
-  const [formData, setFormData] = useState<Partial<Invoice>>(
-    invoice || {
-      invoiceNumber: '',
-      supplierId: '',
-      supplierName: '',
-      invoiceDate: new Date().toISOString().split('T')[0],
-      dueDate: '',
-      items: [],
-      subtotal: 0,
-      tax: 0,
-      totalAmount: 0,
-      status: 'Draft',
-      notes: '',
-      createdBy: currentUserName,
-      createdAt: new Date().toISOString()
+  const emptyInvoice = (): Partial<Invoice> => ({
+    invoiceNumber: '',
+    supplierId: '',
+    supplierName: '',
+    invoiceDate: new Date().toISOString().split('T')[0],
+    dueDate: '',
+    items: [],
+    subtotal: 0,
+    tax: 0,
+    totalAmount: 0,
+    status: 'Draft',
+    notes: '',
+    createdBy: currentUserName,
+    createdAt: new Date().toISOString()
+  });
+
+  const [formData, setFormData] = useState<Partial<Invoice>>(invoice || emptyInvoice());
+
+  // Re-sync the form whenever a different invoice is opened for editing
+  // (or the modal reopens for a fresh "Create") — without this, the modal
+  // keeps stale data from whatever was open last instead of the invoice
+  // that was actually clicked.
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(invoice || emptyInvoice());
     }
-  );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice, isOpen]);
 
   const [error, setError] = useState('');
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantity, setQuantity] = useState<number>(1);
   const [unitPrice, setUnitPrice] = useState<number>(0);
+  const isLinkedToPurchaseOrder = !!formData.purchaseOrderId;
 
   const handleSupplierChange = (supplierId: string) => {
     const supplier = suppliers.find(s => s.id === supplierId);
@@ -144,7 +156,8 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
       status: formData.status as any || 'Draft',
       notes: formData.notes || '',
       createdBy: formData.createdBy!,
-      createdAt: formData.createdAt!
+      createdAt: formData.createdAt!,
+      purchaseOrderId: formData.purchaseOrderId
     };
 
     onSave(newInvoice);
@@ -232,16 +245,21 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
               <Label htmlFor="status">Status</Label>
               <select
                 id="status"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                disabled={isLinkedToPurchaseOrder}
               >
                 <option value="Draft">Draft</option>
                 <option value="Pending">Pending</option>
                 <option value="Paid">Paid</option>
-                <option value="Overdue">Overdue</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
+              {isLinkedToPurchaseOrder && (
+                <p className="text-xs text-gray-500 mt-1">
+                  This invoice was auto-generated from a purchase order — its status follows the order's approval (Pending → Paid, or Cancelled) and can't be edited manually.
+                </p>
+              )}
             </div>
           </div>
 

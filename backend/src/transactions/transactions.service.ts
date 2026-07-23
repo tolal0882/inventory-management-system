@@ -88,11 +88,45 @@ export class TransactionsService {
         );
       }
 
+      if (transaction.purchaseOrderId) {
+        ops.push(
+          this.prisma.purchaseOrder.update({
+            where: { id: transaction.purchaseOrderId },
+            data: { status: 'Received' },
+          }),
+          this.prisma.invoice.updateMany({
+            where: { purchaseOrderId: transaction.purchaseOrderId },
+            data: { status: 'Paid' },
+          }),
+        );
+      }
+
       const [updated] = await this.prisma.$transaction(ops);
       return updated;
     }
 
     // Rejected or other status change — no stock update
+    if (dto.status === 'Rejected' && transaction.purchaseOrderId) {
+      const [updated] = await this.prisma.$transaction([
+        this.prisma.stockTransaction.update({
+          where: { id },
+          data: {
+            status: dto.status as any,
+            ...(dto.note !== undefined && { note: dto.note }),
+          },
+        }),
+        this.prisma.purchaseOrder.update({
+          where: { id: transaction.purchaseOrderId },
+          data: { status: 'Cancelled' },
+        }),
+        this.prisma.invoice.updateMany({
+          where: { purchaseOrderId: transaction.purchaseOrderId },
+          data: { status: 'Cancelled' },
+        }),
+      ]);
+      return updated;
+    }
+
     return this.prisma.stockTransaction.update({
       where: { id },
       data: {

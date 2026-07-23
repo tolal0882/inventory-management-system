@@ -24,7 +24,7 @@ export class PurchaseOrdersController {
   @UseGuards(RolesGuard)
   @Roles('Admin', 'Warehouse_Manager')
   create(@Body() dto: CreatePurchaseOrderDto, @Req() req: any) {
-    return this.purchaseOrdersService.create(dto, req.user.id);
+    return this.purchaseOrdersService.create(dto, req.user.id, req.user.name);
   }
 
   @Put(':id')

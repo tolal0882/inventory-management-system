@@ -123,9 +123,8 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({
       const created = await purchaseOrdersApi.create({
         ...orderData,
         totalAmount: orderData.quantity * orderData.unitPrice,
-        status: 'Draft',
       });
-      toast.success(`Purchase order created for ${orderData.productName}`);
+      toast.success(`Purchase order created for ${orderData.productName} — a stock-in and invoice are now pending approval`);
       setIsPurchaseOrderModalOpen(false);
       setOrderingProductId(undefined);
       if (onPurchaseOrderCreate) onPurchaseOrderCreate(created);
