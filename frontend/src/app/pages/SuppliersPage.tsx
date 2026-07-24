@@ -72,11 +72,11 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ suppliers, onSuppl
     setIsLoading(true);
     try {
       if (editingSupplier) {
-        const { id, createdAt, updatedAt, productsSupplied, ...updateData } = supplier as any;
+        const { id, createdAt, updatedAt, ...updateData } = supplier as any;
         await suppliersApi.update(supplier.id, updateData);
         toast.success(`Supplier "${supplier.name}" updated successfully`);
       } else {
-        const { id, createdAt, updatedAt, productsSupplied, ...createData } = supplier as any;
+        const { id, createdAt, updatedAt, ...createData } = supplier as any;
         await suppliersApi.create(createData);
         toast.success(`Supplier "${supplier.name}" added successfully`);
       }
@@ -141,9 +141,6 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({ suppliers, onSuppl
                         )}
                       </div>
                     </div>
-                    {supplier.description && (
-                      <p className="text-sm text-gray-600 line-clamp-2">{supplier.description}</p>
-                    )}
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2 text-gray-600"><Phone className="w-4 h-4" /><span>{supplier.contact}</span></div>
                       <div className="flex items-center gap-2 text-gray-600"><Mail className="w-4 h-4" /><span className="truncate">{supplier.email}</span></div>

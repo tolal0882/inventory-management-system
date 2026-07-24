@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SuppliersService } from './suppliers.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProductsService } from '../products/products.service';
 import { NotFoundException } from '@nestjs/common';
 
 // ── Mocks ─────────────────────────────────────────────────────
@@ -12,9 +13,16 @@ const mockPrisma = {
     update:    jest.fn(),
     delete:    jest.fn(),
   },
-  supplierProduct: {
-    deleteMany: jest.fn(),
+  product: {
+    findMany:   jest.fn(),
+    findFirst:  jest.fn(),
+    update:     jest.fn(),
+    updateMany: jest.fn(),
   },
+};
+
+const mockProductsService = {
+  createFromSupplierName: jest.fn(),
 };
 
 const RAW_SUPPLIER = {
@@ -24,9 +32,9 @@ const RAW_SUPPLIER = {
   email: 'acme@example.com',
   address: '123 Main St',
   createdAt: new Date(),
-  products: [
-    { productId: 'prod-1', product: { id: 'prod-1', name: 'Widget' } },
-    { productId: 'prod-2', product: { id: 'prod-2', name: 'Gadget' } },
+  suppliedProducts: [
+    { id: 'prod-1', name: 'Widget' },
+    { id: 'prod-2', name: 'Gadget' },
   ],
 };
 
@@ -39,24 +47,27 @@ describe('SuppliersService', () => {
       providers: [
         SuppliersService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: ProductsService, useValue: mockProductsService },
       ],
     }).compile();
 
     service = module.get<SuppliersService>(SuppliersService);
     jest.clearAllMocks();
+
+    // Sensible defaults so tests that don't touch products don't need boilerplate
+    mockPrisma.product.findMany.mockResolvedValue([]);
+    mockPrisma.product.findFirst.mockResolvedValue(null);
   });
 
   // ── findAll ────────────────────────────────────────────────
   describe('findAll()', () => {
-    it('maps products relation into productsSupplied array of IDs', async () => {
+    it('maps suppliedProducts relation into productsSupplied array of names', async () => {
       mockPrisma.supplier.findMany.mockResolvedValue([RAW_SUPPLIER]);
 
       const result = await service.findAll();
 
       expect(result).toHaveLength(1);
-      expect(result[0].productsSupplied).toEqual(['prod-1', 'prod-2']);
-      // The service spreads the raw record — productsSupplied is the ID array derived from products
-      expect(result[0].productsSupplied).toHaveLength(2);
+      expect(result[0].productsSupplied).toEqual(['Widget', 'Gadget']);
     });
 
     it('returns empty array when no suppliers exist', async () => {
@@ -68,7 +79,7 @@ describe('SuppliersService', () => {
     });
 
     it('supplier with no products has an empty productsSupplied array', async () => {
-      mockPrisma.supplier.findMany.mockResolvedValue([{ ...RAW_SUPPLIER, products: [] }]);
+      mockPrisma.supplier.findMany.mockResolvedValue([{ ...RAW_SUPPLIER, suppliedProducts: [] }]);
 
       const result = await service.findAll();
 
@@ -84,7 +95,7 @@ describe('SuppliersService', () => {
       const result = await service.findOne('sup-1');
 
       expect(result.id).toBe('sup-1');
-      expect(result.productsSupplied).toHaveLength(2);
+      expect(result.productsSupplied).toEqual(['Widget', 'Gadget']);
     });
 
     it('throws NotFoundException when supplier does not exist', async () => {
@@ -96,61 +107,86 @@ describe('SuppliersService', () => {
 
   // ── create ─────────────────────────────────────────────────
   describe('create()', () => {
-    it('creates supplier without product links when productsSupplied is empty', async () => {
+    it('creates supplier without touching products when productsSupplied is empty', async () => {
       mockPrisma.supplier.create.mockResolvedValue(RAW_SUPPLIER);
+      mockPrisma.supplier.findUnique.mockResolvedValue({ ...RAW_SUPPLIER, suppliedProducts: [] });
 
       await service.create({ name: 'Acme', contact: 'J', email: 'a@b.com', address: '123' });
 
-      const createData = mockPrisma.supplier.create.mock.calls[0][0].data;
-      expect(createData).not.toHaveProperty('products');
+      expect(mockPrisma.product.findMany).not.toHaveBeenCalled();
+      expect(mockProductsService.createFromSupplierName).not.toHaveBeenCalled();
     });
 
-    it('creates supplier with product links when productsSupplied is provided', async () => {
+    it('auto-creates a product for each new name in productsSupplied', async () => {
       mockPrisma.supplier.create.mockResolvedValue(RAW_SUPPLIER);
+      mockPrisma.supplier.findUnique.mockResolvedValue(RAW_SUPPLIER);
+      mockPrisma.product.findMany.mockResolvedValue([]); // nothing linked yet
+      mockPrisma.product.findFirst.mockResolvedValue(null); // no unlinked match
 
       await service.create({
         name: 'Acme', contact: 'J', email: 'a@b.com', address: '123',
-        productsSupplied: ['prod-1', 'prod-2'],
+        productsSupplied: ['Widget', 'Gadget'],
       });
 
-      const createData = mockPrisma.supplier.create.mock.calls[0][0].data;
-      expect(createData.products.create).toHaveLength(2);
-      expect(createData.products.create[0].productId).toBe('prod-1');
+      expect(mockProductsService.createFromSupplierName).toHaveBeenCalledTimes(2);
+      expect(mockProductsService.createFromSupplierName).toHaveBeenCalledWith('sup-1', 'Widget');
+      expect(mockProductsService.createFromSupplierName).toHaveBeenCalledWith('sup-1', 'Gadget');
+    });
+
+    it('links an existing unlinked product instead of creating a duplicate', async () => {
+      mockPrisma.supplier.create.mockResolvedValue(RAW_SUPPLIER);
+      mockPrisma.supplier.findUnique.mockResolvedValue(RAW_SUPPLIER);
+      mockPrisma.product.findMany.mockResolvedValue([]);
+      mockPrisma.product.findFirst.mockResolvedValue({ id: 'prod-9', name: 'Widget' });
+
+      await service.create({
+        name: 'Acme', contact: 'J', email: 'a@b.com', address: '123',
+        productsSupplied: ['Widget'],
+      });
+
+      expect(mockPrisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'prod-9' },
+        data: { supplierId: 'sup-1' },
+      });
+      expect(mockProductsService.createFromSupplierName).not.toHaveBeenCalled();
     });
   });
 
   // ── update ─────────────────────────────────────────────────
   describe('update()', () => {
     it('updates supplier fields', async () => {
-      mockPrisma.supplier.findUnique.mockResolvedValue(RAW_SUPPLIER);
-      mockPrisma.supplierProduct.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrisma.supplier.findUnique.mockResolvedValueOnce(RAW_SUPPLIER).mockResolvedValueOnce(RAW_SUPPLIER);
       mockPrisma.supplier.update.mockResolvedValue({ ...RAW_SUPPLIER, name: 'Updated Corp' });
 
-      const result = await service.update('sup-1', { name: 'Updated Corp' });
+      await service.update('sup-1', { name: 'Updated Corp' });
 
       expect(mockPrisma.supplier.update).toHaveBeenCalled();
     });
 
-    it('replaces all product links when productsSupplied is provided', async () => {
-      mockPrisma.supplier.findUnique.mockResolvedValue(RAW_SUPPLIER);
-      mockPrisma.supplierProduct.deleteMany.mockResolvedValue({ count: 2 });
+    it('unlinks products whose name is no longer in the list', async () => {
+      mockPrisma.supplier.findUnique.mockResolvedValueOnce(RAW_SUPPLIER).mockResolvedValueOnce(RAW_SUPPLIER);
       mockPrisma.supplier.update.mockResolvedValue(RAW_SUPPLIER);
+      mockPrisma.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Widget' },
+        { id: 'prod-2', name: 'Gadget' },
+      ]);
 
-      await service.update('sup-1', { productsSupplied: ['prod-3'] });
+      await service.update('sup-1', { productsSupplied: ['Widget'] });
 
-      expect(mockPrisma.supplierProduct.deleteMany).toHaveBeenCalledWith({ where: { supplierId: 'sup-1' } });
-      const updateData = mockPrisma.supplier.update.mock.calls[0][0].data;
-      expect(updateData.products.create).toHaveLength(1);
-      expect(updateData.products.create[0].productId).toBe('prod-3');
+      expect(mockPrisma.product.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['prod-2'] } },
+        data: { supplierId: null },
+      });
     });
 
-    it('does NOT delete product links when productsSupplied is not in the DTO', async () => {
-      mockPrisma.supplier.findUnique.mockResolvedValue(RAW_SUPPLIER);
+    it('does NOT touch product links when productsSupplied is not in the DTO', async () => {
+      mockPrisma.supplier.findUnique.mockResolvedValueOnce(RAW_SUPPLIER).mockResolvedValueOnce(RAW_SUPPLIER);
       mockPrisma.supplier.update.mockResolvedValue(RAW_SUPPLIER);
 
       await service.update('sup-1', { name: 'Only Name Change' });
 
-      expect(mockPrisma.supplierProduct.deleteMany).not.toHaveBeenCalled();
+      expect(mockPrisma.product.findMany).not.toHaveBeenCalled();
+      expect(mockPrisma.product.updateMany).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when supplier does not exist', async () => {

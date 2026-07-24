@@ -19,7 +19,6 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     contact: '+855',
     email: '',
     address: '',
-    description: '',
     productsSupplied: [],
   });
 
@@ -35,7 +34,6 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         contact: '+855',
         email: '',
         address: '',
-        description: '',
         productsSupplied: [],
       });
       setProductsInput('');
@@ -51,7 +49,6 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
       contact: formData.contact || '+855',
       email: formData.email || '',
       address: formData.address || '',
-      description: formData.description || '',
       productsSupplied: productsInput.split(',').map(p => p.trim()).filter(p => p),
     };
     onSave(supplierData);
@@ -108,16 +105,6 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Notes about this supplier (optional)"
-                rows={2}
-              />
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="products">Products Supplied</Label>
               <Textarea
                 id="products"
@@ -126,7 +113,11 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 placeholder="Enter product names separated by commas (e.g., Laptop, Monitor, Mouse)"
                 rows={3}
               />
-              <p className="text-xs text-gray-500">Separate multiple products with commas</p>
+              <p className="text-xs text-gray-500">
+                Separate multiple products with commas. New names are auto-created in the Products
+                page with a generated SKU — just fill in the rest of the details there. Removing a
+                name here unlinks that product from this supplier without deleting it.
+              </p>
             </div>
           </div>
           <DialogFooter>

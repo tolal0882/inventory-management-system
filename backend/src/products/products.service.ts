@@ -37,6 +37,37 @@ export class ProductsService {
     });
   }
 
+  // Generates a unique "SKU-00001"-style code, skipping any numbers already taken.
+  async generateSku() {
+    const count = await this.prisma.product.count();
+    let n = count + 1;
+    let sku = `SKU-${String(n).padStart(5, '0')}`;
+    while (await this.prisma.product.findUnique({ where: { sku } })) {
+      n += 1;
+      sku = `SKU-${String(n).padStart(5, '0')}`;
+    }
+    return sku;
+  }
+
+  // Creates a bare-bones product from a supplier's "Products Supplied" list:
+  // only SKU (auto) and name are known, everything else is a placeholder
+  // the user fills in later from the Products page.
+  async createFromSupplierName(supplierId: string, name: string) {
+    const sku = await this.generateSku();
+    return this.prisma.product.create({
+      data: {
+        sku,
+        name,
+        category: 'Other',
+        unit: 'Piece',
+        costPrice: 0,
+        stockQuantity: 0,
+        minStock: 0,
+        supplierId,
+      },
+    });
+  }
+
   async create(dto: CreateProductDto) {
     const exists = await this.prisma.product.findUnique({ where: { sku: dto.sku } });
     if (exists) throw new ConflictException(`SKU "${dto.sku}" already exists`);

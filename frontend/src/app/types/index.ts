@@ -49,7 +49,6 @@ export interface Supplier {
   contact: string;
   email: string;
   address: string;
-  description?: string;
   productsSupplied: string[];
 }
 

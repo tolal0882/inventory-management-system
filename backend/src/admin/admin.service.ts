@@ -13,7 +13,6 @@ export class AdminService {
       this.prisma.invoice.deleteMany(),
       this.prisma.purchaseOrder.deleteMany(),
       this.prisma.stockTransaction.deleteMany(),
-      this.prisma.supplierProduct.deleteMany(),
       this.prisma.product.deleteMany(),
       this.prisma.supplier.deleteMany(),
       this.prisma.otpRecord.deleteMany(),
@@ -25,11 +24,10 @@ export class AdminService {
   // Backs up inventory data only — not users, OTP codes, or the activity
   // log — matching the same scope clearData() operates on.
   async backup() {
-    const [suppliers, products, supplierProducts, purchaseOrders, stockTransactions, invoices, systemSettings] =
+    const [suppliers, products, purchaseOrders, stockTransactions, invoices, systemSettings] =
       await Promise.all([
         this.prisma.supplier.findMany(),
         this.prisma.product.findMany(),
-        this.prisma.supplierProduct.findMany(),
         this.prisma.purchaseOrder.findMany(),
         this.prisma.stockTransaction.findMany(),
         this.prisma.invoice.findMany({ include: { items: true } }),
@@ -39,7 +37,7 @@ export class AdminService {
     return {
       version: BACKUP_VERSION,
       exportedAt: new Date().toISOString(),
-      data: { suppliers, products, supplierProducts, purchaseOrders, stockTransactions, invoices, systemSettings },
+      data: { suppliers, products, purchaseOrders, stockTransactions, invoices, systemSettings },
     };
   }
 
@@ -47,9 +45,9 @@ export class AdminService {
     if (!backup || backup.version !== BACKUP_VERSION || !backup.data) {
       throw new BadRequestException('Invalid or unsupported backup file.');
     }
-    const { suppliers, products, supplierProducts, purchaseOrders, stockTransactions, invoices, systemSettings } =
+    const { suppliers, products, purchaseOrders, stockTransactions, invoices, systemSettings } =
       backup.data;
-    const arrays = { suppliers, products, supplierProducts, purchaseOrders, stockTransactions, invoices };
+    const arrays = { suppliers, products, purchaseOrders, stockTransactions, invoices };
     for (const [key, value] of Object.entries(arrays)) {
       if (!Array.isArray(value)) {
         throw new BadRequestException(`Invalid backup file: missing "${key}" array.`);
@@ -68,14 +66,12 @@ export class AdminService {
         this.prisma.invoice.deleteMany(),
         this.prisma.purchaseOrder.deleteMany(),
         this.prisma.stockTransaction.deleteMany(),
-        this.prisma.supplierProduct.deleteMany(),
         this.prisma.product.deleteMany(),
         this.prisma.supplier.deleteMany(),
 
         // Restore in dependency order: parents before children
         this.prisma.supplier.createMany({ data: suppliers }),
         this.prisma.product.createMany({ data: products }),
-        this.prisma.supplierProduct.createMany({ data: supplierProducts }),
         this.prisma.purchaseOrder.createMany({ data: purchaseOrders }),
         this.prisma.stockTransaction.createMany({ data: stockTransactions }),
         this.prisma.invoice.createMany({ data: invoicesWithoutItems }),

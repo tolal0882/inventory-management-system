@@ -108,7 +108,6 @@ model Product {
   transactions     StockTransaction[]
   purchaseOrders   PurchaseOrder[]
   invoiceItems     InvoiceItem[]
-  supplierProducts SupplierProduct[]
 }
 
 model Supplier {
@@ -117,23 +116,12 @@ model Supplier {
   contact     String
   email       String
   address     String
-  description String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   suppliedProducts Product[]
-  products       SupplierProduct[]
   purchaseOrders PurchaseOrder[]
   invoices       Invoice[]
-}
-
-model SupplierProduct {
-  supplierId String
-  productId  String
-  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@id([supplierId, productId])
 }
 
 model StockTransaction {
